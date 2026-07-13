@@ -15,10 +15,12 @@ use Throwable;
 final class Cli
 {
     private readonly SessionStore $store;
+    private readonly WorkBriefStore $workBriefs;
 
-    public function __construct(?SessionStore $store = null)
+    public function __construct(?SessionStore $store = null, ?WorkBriefStore $workBriefs = null)
     {
         $this->store = $store ?? new SessionStore();
+        $this->workBriefs = $workBriefs ?? new WorkBriefStore();
     }
 
     /**
@@ -39,6 +41,7 @@ final class Cli
                 'close' => $this->closeCommand($tokens),
                 'list' => $this->listCommand($tokens),
                 'show' => $this->showCommand($tokens),
+                'brief' => $this->briefCommand($tokens),
                 'prune' => $this->pruneCommand($tokens),
                 'help', '--help', '-h' => $this->helpCommand(),
                 default => $this->unknownCommand($command),
@@ -219,6 +222,84 @@ final class Cli
     /**
      * @param list<string> $tokens
      */
+    private function briefCommand(array $tokens): int
+    {
+        $action = array_shift($tokens) ?? 'help';
+        if (in_array($action, ['help', '--help', '-h'], true)) {
+            return $this->briefHelpCommand();
+        }
+
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->resolveRoot($parsed['options']);
+        $session = $this->store->load($root, $this->requireId($parsed['arguments']));
+
+        return match ($action) {
+            'create' => $this->createBriefCommand($session, $parsed['options']),
+            'revise' => $this->reviseBriefCommand($session, $parsed['options']),
+            'approve' => $this->approveBriefCommand($session, $parsed['options']),
+            'show' => $this->showBriefCommand($session),
+            default => $this->unknownBriefAction($action),
+        };
+    }
+
+    /**
+     * @param array<string, list<string>> $options
+     */
+    private function createBriefCommand(Session $session, array $options): int
+    {
+        $brief = $this->workBriefs->create(
+            $session,
+            $this->stringOption($options, 'goal') ?? '',
+            $this->stringOptions($options, 'scope'),
+            $this->stringOptions($options, 'non-goal'),
+            $this->stringOptions($options, 'validation'),
+        );
+        fwrite(STDOUT, sprintf("Created work brief revision %d for session '%s'.\n", $brief->revision, $session->id));
+
+        return 0;
+    }
+
+    /**
+     * @param array<string, list<string>> $options
+     */
+    private function reviseBriefCommand(Session $session, array $options): int
+    {
+        $brief = $this->workBriefs->revise(
+            $session,
+            $this->stringOption($options, 'goal') ?? '',
+            $this->stringOptions($options, 'scope'),
+            $this->stringOptions($options, 'non-goal'),
+            $this->stringOptions($options, 'validation'),
+        );
+        fwrite(STDOUT, sprintf("Created candidate work brief revision %d for session '%s'; prior approval is superseded.\n", $brief->revision, $session->id));
+
+        return 0;
+    }
+
+    /**
+     * @param array<string, list<string>> $options
+     */
+    private function approveBriefCommand(Session $session, array $options): int
+    {
+        $approval = $this->workBriefs->approve($session, $this->stringOption($options, 'by') ?? '');
+        fwrite(STDOUT, sprintf("Approved work brief revision %d for session '%s' by '%s'.\n", $approval->workBriefRevision, $session->id, $approval->approvedBy));
+
+        return 0;
+    }
+
+    private function showBriefCommand(Session $session): int
+    {
+        $brief = $this->workBriefs->load($session);
+        $data = $brief->toArray();
+        $data['approval'] = $this->workBriefs->approval($session)?->toArray();
+        fwrite(STDOUT, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n");
+
+        return 0;
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
     private function pruneCommand(array $tokens): int
     {
         $parsed = $this->parseOptions($tokens);
@@ -271,6 +352,7 @@ final class Cli
           close       Close a session.   <id> --status done|dropped
           list        List sessions.     [--status STATUS]
           show        Show metadata.     <id>
+          brief       Manage a work brief. <create|revise|approve|show> <id> [options]
           prune       Retention cleanup. [--keep-days N] [--status done,dropped] [--dry-run]
 
         Global:
@@ -279,6 +361,34 @@ final class Cli
         TXT);
 
         return 0;
+    }
+
+    private function briefHelpCommand(): int
+    {
+        fwrite(STDOUT, <<<TXT
+        agent-session brief - versioned work-brief and approval artifacts.
+
+        Usage:
+          agent-session brief create <id> --goal TEXT --scope PATH [--scope PATH] [--non-goal TEXT] --validation COMMAND [--validation COMMAND]
+          agent-session brief revise <id> --goal TEXT --scope PATH [--scope PATH] [--non-goal TEXT] --validation COMMAND [--validation COMMAND]
+          agent-session brief approve <id> --by ACTOR
+          agent-session brief show <id>
+
+        Revising a brief archives the prior revision as superseded and clears
+        its current approval. The historical work brief and approval remain in
+        work-brief-history/ for audit.
+
+        TXT);
+
+        return 0;
+    }
+
+    private function unknownBriefAction(string $action): int
+    {
+        fwrite(STDERR, 'Unknown brief action: ' . $action . "\n");
+        fwrite(STDERR, "Run 'agent-session brief help' to view usage.\n");
+
+        return 1;
     }
 
     private function unknownCommand(string $command): int
@@ -350,6 +460,15 @@ final class Cli
     private function stringOption(array $options, string $name): ?string
     {
         return $options[$name][0] ?? null;
+    }
+
+    /**
+     * @param array<string, list<string>> $options
+     * @return list<string>
+     */
+    private function stringOptions(array $options, string $name): array
+    {
+        return $options[$name] ?? [];
     }
 
     /**

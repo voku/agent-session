@@ -101,6 +101,36 @@ final class CliTest extends TestCase
         self::assertSame(1, $this->invoke(['close', $id, '--status', 'active', '--root', $this->root]));
     }
 
+    public function testBriefCreateApproveReviseAndShowFlow(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'task.x', '--slug', 'brief', '--root', $this->root]));
+        $id = $this->firstSessionId();
+        $store = new SessionStore();
+
+        self::assertSame(0, $this->invoke([
+            'brief', 'create', $id,
+            '--goal', 'Make task scope explicit.',
+            '--scope', 'src/Scope.php',
+            '--validation', 'vendor/bin/phpunit tests/ScopeTest.php',
+            '--root', $this->root,
+        ]));
+        self::assertFileExists($store->pathFor($this->root, $id) . '/work-brief.json');
+
+        self::assertSame(0, $this->invoke(['brief', 'approve', $id, '--by', 'lars', '--root', $this->root]));
+        self::assertFileExists($store->pathFor($this->root, $id) . '/approval.json');
+
+        self::assertSame(0, $this->invoke([
+            'brief', 'revise', $id,
+            '--goal', 'Make task scope explicit.',
+            '--scope', 'src/Scope.php',
+            '--scope', 'tests/ScopeTest.php',
+            '--validation', 'vendor/bin/phpunit tests/ScopeTest.php',
+            '--root', $this->root,
+        ]));
+        self::assertFileDoesNotExist($store->pathFor($this->root, $id) . '/approval.json');
+        self::assertSame(0, $this->invoke(['brief', 'show', $id, '--root', $this->root]));
+    }
+
     private function removeDirectory(string $path): void
     {
         if (!is_dir($path)) {

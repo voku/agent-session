@@ -18,6 +18,10 @@ Each session is one directory under a sessions root (default `session_plan/`):
 session_plan/
   2026-06-07-remove-session-access/
     session.json        # metadata: task id, status, claim, base commit, checkpoints
+    work-brief.json     # versioned candidate/approved scope contract (created on demand)
+    work-brief.md       # human-readable projection of the current brief
+    approval.json       # current approval metadata, only when the current brief is approved
+    work-brief-history/ # superseded briefs and their historical approvals
     plan.md
     assumptions.md
     decisions.md
@@ -29,6 +33,12 @@ session_plan/
 
 `session.json` carries the **claim metadata** that makes parallel agents safe:
 `claimed_by`, `claimed_at`, and `base_commit`.
+
+`work-brief.json` is intentionally separate from mutable plan notes. It records
+the task goal, approved scope, non-goals, validation commands, a schema version,
+and a revision/status (`candidate`, `approved`, or `superseded`). Changing the
+brief creates a new candidate revision, archives the prior revision, and
+invalidates its approval. Existing sessions without a work brief remain valid.
 
 ## Requirements
 
@@ -50,6 +60,11 @@ agent-session claim 2026-06-07-remove-session-access --by lars      # refuses a 
 agent-session checkpoint 2026-06-07-remove-session-access --title "Implementation" --body "Updated the primary service."
 agent-session record 2026-06-07-remove-session-access --kind decision   --title "Keep change module-scoped" --body "..."
 agent-session record 2026-06-07-remove-session-access --kind assumption --title "Missing-context behaviour" --body "..."
+agent-session brief create 2026-06-07-remove-session-access --goal "Remove obsolete session access." --scope src/SessionAccess.php --scope tests/SessionAccessTest.php --non-goal "Do not add a new memory layer." --validation "vendor/bin/phpunit tests/SessionAccessTest.php"
+agent-session brief approve 2026-06-07-remove-session-access --by lars
+# A changed scope creates a new candidate revision and clears the current approval.
+agent-session brief revise 2026-06-07-remove-session-access --goal "Remove obsolete session access." --scope src/SessionAccess.php --scope tests/SessionAccessTest.php --scope docs/session-access.md --validation "vendor/bin/phpunit tests/SessionAccessTest.php"
+agent-session brief show 2026-06-07-remove-session-access
 agent-session close 2026-06-07-remove-session-access --status done
 agent-session list --status active
 agent-session show  2026-06-07-remove-session-access
