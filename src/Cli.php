@@ -16,11 +16,20 @@ final class Cli
 {
     private readonly SessionStore $store;
     private readonly WorkBriefStore $workBriefs;
+    private readonly ValidationEvidenceStore $validationEvidence;
+    private readonly LearningDecisionStore $learningDecisions;
 
-    public function __construct(?SessionStore $store = null, ?WorkBriefStore $workBriefs = null)
+    public function __construct(
+        ?SessionStore $store = null,
+        ?WorkBriefStore $workBriefs = null,
+        ?ValidationEvidenceStore $validationEvidence = null,
+        ?LearningDecisionStore $learningDecisions = null,
+    )
     {
         $this->store = $store ?? new SessionStore();
         $this->workBriefs = $workBriefs ?? new WorkBriefStore();
+        $this->validationEvidence = $validationEvidence ?? new ValidationEvidenceStore();
+        $this->learningDecisions = $learningDecisions ?? new LearningDecisionStore();
     }
 
     /**
@@ -42,6 +51,8 @@ final class Cli
                 'list' => $this->listCommand($tokens),
                 'show' => $this->showCommand($tokens),
                 'brief' => $this->briefCommand($tokens),
+                'validation' => $this->validationCommand($tokens),
+                'learning' => $this->learningCommand($tokens),
                 'prune' => $this->pruneCommand($tokens),
                 'help', '--help', '-h' => $this->helpCommand(),
                 default => $this->unknownCommand($command),
@@ -297,6 +308,58 @@ final class Cli
         return 0;
     }
 
+    /** @param list<string> $tokens */
+    private function validationCommand(array $tokens): int
+    {
+        $action = array_shift($tokens) ?? 'help';
+        if (in_array($action, ['help', '--help', '-h'], true)) {
+            fwrite(STDOUT, "Usage: agent-session validation record <id> --brief-revision N --command COMMAND --status passed|failed --exit-code N [--duration-ms N] [--by ACTOR] [--note TEXT]\n");
+
+            return 0;
+        }
+        if ($action !== 'record') {
+            throw new \InvalidArgumentException('Unknown validation action: ' . $action);
+        }
+        $parsed = $this->parseOptions($tokens);
+        $session = $this->store->load($this->resolveRoot($parsed['options']), $this->requireId($parsed['arguments']));
+        $revision = $this->requiredPositiveInt($this->stringOption($parsed['options'], 'brief-revision'), '--brief-revision');
+        $exitCode = $this->requiredNonNegativeInt($this->stringOption($parsed['options'], 'exit-code'), '--exit-code');
+        $duration = $this->stringOption($parsed['options'], 'duration-ms');
+        $durationMs = $duration === null ? null : $this->requiredNonNegativeInt($duration, '--duration-ms');
+        $status = ValidationStatus::tryFrom($this->stringOption($parsed['options'], 'status') ?? '');
+        if ($status === null) {
+            throw new \InvalidArgumentException('--status must be passed or failed.');
+        }
+        $evidence = $this->validationEvidence->record($session, $revision, $this->stringOption($parsed['options'], 'command') ?? '', $status, $exitCode, $durationMs, $this->stringOption($parsed['options'], 'by'), $this->stringOption($parsed['options'], 'note'));
+        fwrite(STDOUT, sprintf("Recorded %s validation evidence for work brief revision %d on session '%s'.\n", $evidence->status->value, $evidence->workBriefRevision, $session->id));
+
+        return 0;
+    }
+
+    /** @param list<string> $tokens */
+    private function learningCommand(array $tokens): int
+    {
+        $action = array_shift($tokens) ?? 'help';
+        if (in_array($action, ['help', '--help', '-h'], true)) {
+            fwrite(STDOUT, "Usage: agent-session learning decide <id> --status findings_recorded|no_durable_learning|follow_up_required --by ACTOR [--reason TEXT]\n");
+
+            return 0;
+        }
+        if ($action !== 'decide') {
+            throw new \InvalidArgumentException('Unknown learning action: ' . $action);
+        }
+        $parsed = $this->parseOptions($tokens);
+        $session = $this->store->load($this->resolveRoot($parsed['options']), $this->requireId($parsed['arguments']));
+        $decision = LearningDecision::tryFrom($this->stringOption($parsed['options'], 'status') ?? '');
+        if ($decision === null) {
+            throw new \InvalidArgumentException('--status must be findings_recorded, no_durable_learning, or follow_up_required.');
+        }
+        $record = $this->learningDecisions->decide($session, $decision, $this->stringOption($parsed['options'], 'by') ?? '', $this->stringOption($parsed['options'], 'reason'));
+        fwrite(STDOUT, sprintf("Recorded learning decision %s for session '%s'.\n", $record->decision->value, $session->id));
+
+        return 0;
+    }
+
     /**
      * @param list<string> $tokens
      */
@@ -353,6 +416,8 @@ final class Cli
           list        List sessions.     [--status STATUS]
           show        Show metadata.     <id>
           brief       Manage a work brief. <create|revise|approve|show> <id> [options]
+          validation  Record structured validation evidence. <record> <id> [options]
+          learning    Record a task learning decision. <decide> <id> [options]
           prune       Retention cleanup. [--keep-days N] [--status done,dropped] [--dry-run]
 
         Global:
@@ -477,5 +542,23 @@ final class Cli
     private function hasFlag(array $options, string $name): bool
     {
         return isset($options[$name]);
+    }
+
+    private function requiredPositiveInt(?string $value, string $option): int
+    {
+        if ($value === null || filter_var($value, FILTER_VALIDATE_INT) === false || (int) $value < 1) {
+            throw new \InvalidArgumentException($option . ' requires a positive integer.');
+        }
+
+        return (int) $value;
+    }
+
+    private function requiredNonNegativeInt(?string $value, string $option): int
+    {
+        if ($value === null || filter_var($value, FILTER_VALIDATE_INT) === false || (int) $value < 0) {
+            throw new \InvalidArgumentException($option . ' requires a non-negative integer.');
+        }
+
+        return (int) $value;
     }
 }

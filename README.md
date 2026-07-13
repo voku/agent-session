@@ -26,6 +26,8 @@ session_plan/
     assumptions.md
     decisions.md
     validation.md
+    validation-evidence.jsonl # append-only machine-readable validation executions
+    learning-decision.json    # explicit close-out decision (created on demand)
     checkpoints/
       index.md
       001-discovery.md
@@ -39,6 +41,12 @@ the task goal, approved scope, non-goals, validation commands, a schema version,
 and a revision/status (`candidate`, `approved`, or `superseded`). Changing the
 brief creates a new candidate revision, archives the prior revision, and
 invalidates its approval. Existing sessions without a work brief remain valid.
+
+`validation-evidence.jsonl` records actual executions against the brief revision
+that required them. Re-planning does not delete old evidence; the next workflow
+can therefore show it as stale instead of accidentally treating it as proof for
+the new scope. `learning-decision.json` makes forgetting explicit: a completed
+session records whether it produced findings, no durable learning, or a follow-up.
 
 ## Requirements
 
@@ -65,6 +73,8 @@ agent-session brief approve 2026-06-07-remove-session-access --by lars
 # A changed scope creates a new candidate revision and clears the current approval.
 agent-session brief revise 2026-06-07-remove-session-access --goal "Remove obsolete session access." --scope src/SessionAccess.php --scope tests/SessionAccessTest.php --scope docs/session-access.md --validation "vendor/bin/phpunit tests/SessionAccessTest.php"
 agent-session brief show 2026-06-07-remove-session-access
+agent-session validation record 2026-06-07-remove-session-access --brief-revision 1 --command "vendor/bin/phpunit tests/SessionAccessTest.php" --status passed --exit-code 0 --duration-ms 1840 --by lars
+agent-session learning decide 2026-06-07-remove-session-access --status no_durable_learning --by lars --reason "No reusable finding emerged."
 agent-session close 2026-06-07-remove-session-access --status done
 agent-session list --status active
 agent-session show  2026-06-07-remove-session-access

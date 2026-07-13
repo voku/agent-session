@@ -131,6 +131,17 @@ final class CliTest extends TestCase
         self::assertSame(0, $this->invoke(['brief', 'show', $id, '--root', $this->root]));
     }
 
+    public function testValidationAndLearningCompletionFlow(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'task.x', '--slug', 'completion', '--root', $this->root]));
+        $id = $this->firstSessionId();
+
+        self::assertSame(0, $this->invoke(['validation', 'record', $id, '--brief-revision', '1', '--command', 'vendor/bin/phpunit', '--status', 'passed', '--exit-code', '0', '--duration-ms', '22', '--by', 'lars', '--root', $this->root]));
+        self::assertSame(0, $this->invoke(['learning', 'decide', $id, '--status', 'no_durable_learning', '--by', 'lars', '--root', $this->root]));
+        self::assertFileExists((new SessionStore())->pathFor($this->root, $id) . '/validation-evidence.jsonl');
+        self::assertFileExists((new SessionStore())->pathFor($this->root, $id) . '/learning-decision.json');
+    }
+
     private function removeDirectory(string $path): void
     {
         if (!is_dir($path)) {
