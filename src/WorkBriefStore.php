@@ -25,15 +25,16 @@ final class WorkBriefStore
      * @param list<string> $scope
      * @param list<string> $nonGoals
      * @param list<string> $validation
+     * @param list<string> $tags
      */
-    public function create(Session $session, string $goal, array $scope, array $nonGoals, array $validation): WorkBrief
+    public function create(Session $session, string $goal, array $scope, array $nonGoals, array $validation, array $tags = []): WorkBrief
     {
         if ($this->find($session) !== null) {
             throw new RuntimeException(sprintf("Session '%s' already has a work brief. Use revise instead.", $session->id));
         }
 
         $now = $this->now();
-        $brief = $this->newBrief($session, $goal, $scope, $nonGoals, $validation, WorkBriefStatus::CANDIDATE, 1, $now, $now);
+        $brief = $this->newBrief($session, $goal, $scope, $nonGoals, $validation, $tags, WorkBriefStatus::CANDIDATE, 1, $now, $now);
         $this->writeBrief($brief);
 
         return $brief;
@@ -104,6 +105,7 @@ final class WorkBriefStore
             $brief->createdAt,
             $now,
             $brief->path,
+            $brief->tags,
         );
         $this->writeBrief($approved);
 
@@ -117,8 +119,9 @@ final class WorkBriefStore
      * @param list<string> $scope
      * @param list<string> $nonGoals
      * @param list<string> $validation
+     * @param list<string> $tags
      */
-    public function revise(Session $session, string $goal, array $scope, array $nonGoals, array $validation): WorkBrief
+    public function revise(Session $session, string $goal, array $scope, array $nonGoals, array $validation, array $tags = []): WorkBrief
     {
         $previous = $this->load($session);
         $now = $this->now();
@@ -128,6 +131,7 @@ final class WorkBriefStore
             $scope,
             $nonGoals,
             $validation,
+            $tags,
             WorkBriefStatus::CANDIDATE,
             $previous->revision + 1,
             $now,
@@ -160,6 +164,7 @@ final class WorkBriefStore
             $brief->createdAt,
             $this->now(),
             $directory . '/' . $this->historyFilename($brief->revision),
+            $brief->tags,
         );
         $this->writeJson($superseded->path, $superseded->toArray());
 
@@ -172,6 +177,7 @@ final class WorkBriefStore
      * @param list<string> $scope
      * @param list<string> $nonGoals
      * @param list<string> $validation
+     * @param list<string> $tags
      */
     private function newBrief(
         Session $session,
@@ -179,6 +185,7 @@ final class WorkBriefStore
         array $scope,
         array $nonGoals,
         array $validation,
+        array $tags,
         WorkBriefStatus $status,
         int $revision,
         string $createdAt,
@@ -210,6 +217,7 @@ final class WorkBriefStore
             $createdAt,
             $updatedAt,
             $this->workBriefPath($session),
+            $this->normalizedLines($tags),
         );
     }
 
@@ -258,6 +266,10 @@ final class WorkBriefStore
             '',
             ...array_map(static fn (string $item): string => '- `' . $item . '`', $brief->validation),
             '',
+            '## Relevance tags',
+            '',
+            ...($brief->tags === [] ? ['- None recorded.'] : array_map(static fn (string $item): string => '- `' . $item . '`', $brief->tags)),
+            '',
         ];
 
         return implode("\n", $lines);
@@ -290,6 +302,7 @@ final class WorkBriefStore
             $this->requiredString($data, 'created_at', $jsonPath),
             $this->requiredString($data, 'updated_at', $jsonPath),
             $briefPath,
+            $this->listField($data, 'tags', $jsonPath),
         );
     }
 

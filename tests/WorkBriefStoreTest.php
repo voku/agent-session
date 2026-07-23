@@ -55,6 +55,47 @@ final class WorkBriefStoreTest extends TestCase
         self::assertSame($brief->toArray(), $loaded->toArray());
     }
 
+    public function testCreateRecordsRelevanceTagsIndependentlyOfScopePaths(): void
+    {
+        $session = (new SessionStore())->create($this->root, 'task.123');
+        $briefs = new WorkBriefStore();
+
+        $brief = $briefs->create(
+            $session,
+            'Sync employees from the directory.',
+            ['modules/employee/Sync.php'],
+            [],
+            ['vendor/bin/phpunit'],
+            ['identity', 'ldap', 'identity'],
+        );
+
+        self::assertSame(['identity', 'ldap'], $brief->tags);
+        self::assertStringContainsString('## Relevance tags', (string) file_get_contents($session->path . '/work-brief.md'));
+        self::assertStringContainsString('`ldap`', (string) file_get_contents($session->path . '/work-brief.md'));
+
+        $loaded = $briefs->load($session);
+        self::assertSame(['identity', 'ldap'], $loaded->tags);
+
+        $decoded = json_decode((string) file_get_contents($session->path . '/work-brief.json'), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame(['identity', 'ldap'], $decoded['tags']);
+    }
+
+    public function testCreateWithoutTagsDefaultsToEmptyListAndOlderBriefsWithoutTagsStayReadable(): void
+    {
+        $session = (new SessionStore())->create($this->root, 'task.legacy-brief');
+        $briefs = new WorkBriefStore();
+        $brief = $briefs->create($session, 'Keep the scope reviewable.', ['src/Scope.php'], [], ['vendor/bin/phpunit']);
+        self::assertSame([], $brief->tags);
+
+        // Simulate a work-brief.json written before tags existed.
+        $decoded = json_decode((string) file_get_contents($session->path . '/work-brief.json'), true, 512, JSON_THROW_ON_ERROR);
+        unset($decoded['tags']);
+        file_put_contents($session->path . '/work-brief.json', json_encode($decoded, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+
+        $loaded = $briefs->load($session);
+        self::assertSame([], $loaded->tags);
+    }
+
     public function testApproveRecordsActorAndBriefRevision(): void
     {
         $session = (new SessionStore())->create($this->root, 'task.123');

@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-07-23
+
+### Added
+
+- Work briefs may carry optional, repeatable relevance `tags` (via `--tag` on
+  `brief create`/`brief revise`), independent of `--scope` paths. Recall
+  consumers such as `voku/agent-recall-compiler` can match facts against
+  these tags even when a task's files share no path prefix with the fact's
+  scope. Purely additive: briefs without tags decode and behave exactly as
+  before.
+
 ## 0.2.0 - 2026-07-13
 
 ### Added

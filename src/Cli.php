@@ -264,6 +264,7 @@ final class Cli
             $this->stringOptions($options, 'scope'),
             $this->stringOptions($options, 'non-goal'),
             $this->stringOptions($options, 'validation'),
+            $this->stringOptions($options, 'tag'),
         );
         fwrite(STDOUT, sprintf("Created work brief revision %d for session '%s'.\n", $brief->revision, $session->id));
 
@@ -281,6 +282,7 @@ final class Cli
             $this->stringOptions($options, 'scope'),
             $this->stringOptions($options, 'non-goal'),
             $this->stringOptions($options, 'validation'),
+            $this->stringOptions($options, 'tag'),
         );
         fwrite(STDOUT, sprintf("Created candidate work brief revision %d for session '%s'; prior approval is superseded.\n", $brief->revision, $session->id));
 
@@ -434,14 +436,20 @@ final class Cli
         agent-session brief - versioned work-brief and approval artifacts.
 
         Usage:
-          agent-session brief create <id> --goal TEXT --scope PATH [--scope PATH] [--non-goal TEXT] --validation COMMAND [--validation COMMAND]
-          agent-session brief revise <id> --goal TEXT --scope PATH [--scope PATH] [--non-goal TEXT] --validation COMMAND [--validation COMMAND]
+          agent-session brief create <id> --goal TEXT --scope PATH [--scope PATH] [--non-goal TEXT] --validation COMMAND [--validation COMMAND] [--tag LABEL]
+          agent-session brief revise <id> --goal TEXT --scope PATH [--scope PATH] [--non-goal TEXT] --validation COMMAND [--validation COMMAND] [--tag LABEL]
           agent-session brief approve <id> --by ACTOR
           agent-session brief show <id>
 
         Revising a brief archives the prior revision as superseded and clears
         its current approval. The historical work brief and approval remain in
         work-brief-history/ for audit.
+
+        --tag is an optional, repeatable relevance label (domain, system,
+        capability, or any other taxonomy the project chooses). It is matched
+        by recall consumers independently of --scope paths, so cross-cutting
+        knowledge (e.g. an LDAP learning) can be selected for a task whose
+        files live under an unrelated-looking directory.
 
         TXT);
 

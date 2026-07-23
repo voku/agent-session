@@ -16,6 +16,9 @@ final readonly class WorkBrief
      * @param list<string> $scope
      * @param list<string> $nonGoals
      * @param list<string> $validation
+     * @param list<string> $tags Project-defined relevance labels (domain, system, capability,
+     *        or any other taxonomy), independent of directory layout. Recall consumers may match
+     *        facts against these in addition to path scope.
      */
     public function __construct(
         public string $taskId,
@@ -28,6 +31,7 @@ final readonly class WorkBrief
         public string $createdAt,
         public string $updatedAt,
         public string $path,
+        public array $tags = [],
     ) {
     }
 
@@ -43,6 +47,7 @@ final readonly class WorkBrief
             'scope' => $this->scope,
             'non_goals' => $this->nonGoals,
             'validation' => $this->validation,
+            'tags' => $this->tags,
             'status' => $this->status->value,
             'revision' => $this->revision,
             'created_at' => $this->createdAt,
