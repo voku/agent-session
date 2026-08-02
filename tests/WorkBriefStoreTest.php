@@ -94,6 +94,29 @@ final class WorkBriefStoreTest extends TestCase
 
         $loaded = $briefs->load($session);
         self::assertSame([], $loaded->tags);
+        self::assertSame([], $loaded->behaviorAnchors);
+    }
+
+    public function testCreateRecordsBehaviorAnchorsWithoutMakingThemMandatory(): void
+    {
+        $session = (new SessionStore())->create($this->root, 'task.123');
+        $briefs = new WorkBriefStore();
+
+        $brief = $briefs->create(
+            $session,
+            'Keep the actual request flow reviewable.',
+            ['modules/employee/Sync.php'],
+            [],
+            ['vendor/bin/phpunit'],
+            [],
+            ['POST payload -> EmployeeSyncAction -> directory gateway', 'directory gateway response -> audit event'],
+        );
+
+        self::assertSame(['POST payload -> EmployeeSyncAction -> directory gateway', 'directory gateway response -> audit event'], $brief->behaviorAnchors);
+        self::assertStringContainsString('## Behavior anchors', (string) file_get_contents($session->path . '/work-brief.md'));
+
+        $decoded = json_decode((string) file_get_contents($session->path . '/work-brief.json'), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame($brief->behaviorAnchors, $decoded['behavior_anchors']);
     }
 
     public function testApproveRecordsActorAndBriefRevision(): void

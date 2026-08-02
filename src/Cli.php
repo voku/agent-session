@@ -265,6 +265,7 @@ final class Cli
             $this->stringOptions($options, 'non-goal'),
             $this->stringOptions($options, 'validation'),
             $this->stringOptions($options, 'tag'),
+            $this->stringOptions($options, 'behavior-anchor'),
         );
         fwrite(STDOUT, sprintf("Created work brief revision %d for session '%s'.\n", $brief->revision, $session->id));
 
@@ -283,6 +284,7 @@ final class Cli
             $this->stringOptions($options, 'non-goal'),
             $this->stringOptions($options, 'validation'),
             $this->stringOptions($options, 'tag'),
+            $this->stringOptions($options, 'behavior-anchor'),
         );
         fwrite(STDOUT, sprintf("Created candidate work brief revision %d for session '%s'; prior approval is superseded.\n", $brief->revision, $session->id));
 
@@ -436,8 +438,8 @@ final class Cli
         agent-session brief - versioned work-brief and approval artifacts.
 
         Usage:
-          agent-session brief create <id> --goal TEXT --scope PATH [--scope PATH] [--non-goal TEXT] --validation COMMAND [--validation COMMAND] [--tag LABEL]
-          agent-session brief revise <id> --goal TEXT --scope PATH [--scope PATH] [--non-goal TEXT] --validation COMMAND [--validation COMMAND] [--tag LABEL]
+          agent-session brief create <id> --goal TEXT --scope PATH [--scope PATH] [--non-goal TEXT] --validation COMMAND [--validation COMMAND] [--tag LABEL] [--behavior-anchor TEXT]
+          agent-session brief revise <id> --goal TEXT --scope PATH [--scope PATH] [--non-goal TEXT] --validation COMMAND [--validation COMMAND] [--tag LABEL] [--behavior-anchor TEXT]
           agent-session brief approve <id> --by ACTOR
           agent-session brief show <id>
 
@@ -450,6 +452,11 @@ final class Cli
         by recall consumers independently of --scope paths, so cross-cutting
         knowledge (e.g. an LDAP learning) can be selected for a task whose
         files live under an unrelated-looking directory.
+
+        --behavior-anchor is an optional, repeatable description of the real
+        request, runtime, consumer, data, or integration boundary that owns
+        the changed behavior. It is not required for documentation-only or
+        static-only work; record that absence explicitly in the task plan.
 
         TXT);
 

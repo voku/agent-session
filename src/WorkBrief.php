@@ -16,6 +16,8 @@ final readonly class WorkBrief
      * @param list<string> $scope
      * @param list<string> $nonGoals
      * @param list<string> $validation
+     * @param list<string> $behaviorAnchors Concrete runtime/request/consumer boundaries
+     *        that must be inspected or verified when the task changes behavior.
      * @param list<string> $tags Project-defined relevance labels (domain, system, capability,
      *        or any other taxonomy), independent of directory layout. Recall consumers may match
      *        facts against these in addition to path scope.
@@ -32,6 +34,7 @@ final readonly class WorkBrief
         public string $updatedAt,
         public string $path,
         public array $tags = [],
+        public array $behaviorAnchors = [],
     ) {
     }
 
@@ -48,6 +51,7 @@ final readonly class WorkBrief
             'non_goals' => $this->nonGoals,
             'validation' => $this->validation,
             'tags' => $this->tags,
+            'behavior_anchors' => $this->behaviorAnchors,
             'status' => $this->status->value,
             'revision' => $this->revision,
             'created_at' => $this->createdAt,

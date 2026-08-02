@@ -112,9 +112,12 @@ final class CliTest extends TestCase
             '--goal', 'Make task scope explicit.',
             '--scope', 'src/Scope.php',
             '--validation', 'vendor/bin/phpunit tests/ScopeTest.php',
+            '--behavior-anchor', 'HTTP request -> scope service -> persisted access state',
             '--root', $this->root,
         ]));
         self::assertFileExists($store->pathFor($this->root, $id) . '/work-brief.json');
+        $brief = json_decode((string) file_get_contents($store->pathFor($this->root, $id) . '/work-brief.json'), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame(['HTTP request -> scope service -> persisted access state'], $brief['behavior_anchors']);
 
         self::assertSame(0, $this->invoke(['brief', 'approve', $id, '--by', 'lars', '--root', $this->root]));
         self::assertFileExists($store->pathFor($this->root, $id) . '/approval.json');
