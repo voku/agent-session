@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   existed still counts as governed work - defaulting the other way would let old
   sessions quietly escape every repository gate.
 
+### Fixed
+
+- The binary resolved its autoloader by preferring the package's own `vendor/`
+  directory. When one is present next to an installed copy - a path repository, a
+  mirrored checkout, a stale local install - that autoloader wins and silently
+  loads *its* dependencies instead of the project's. Found by a release-set smoke
+  test that reported `Undefined property Session::$ephemeral` against an
+  installed version that plainly had it. The outer autoloader is now tried first.
+
 ### Why
 
 - A throwaway session created during a dogfood run failed the repository-wide
