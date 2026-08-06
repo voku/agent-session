@@ -78,11 +78,15 @@ final class Cli
             $this->stringOption($parsed['options'], 'slug'),
             $this->stringOption($parsed['options'], 'by'),
             $this->stringOption($parsed['options'], 'base-commit'),
+            $this->hasFlag($parsed['options'], 'ephemeral'),
         );
 
         fwrite(\STDOUT, sprintf("Started session: %s\n", $session->id));
         fwrite(\STDOUT, sprintf("- path: %s\n", $session->path));
         fwrite(\STDOUT, "- working-memory files: plan.md, assumptions.md, decisions.md, validation.md, checkpoints/\n");
+        if ($session->ephemeral) {
+            fwrite(\STDOUT, "- ephemeral: repository-wide gates ignore this session; close it when the experiment is over\n");
+        }
 
         return 0;
     }
@@ -412,7 +416,7 @@ final class Cli
           agent-session <command> [options]
 
         Commands:
-          start       Start a session.   --task ID [--by ACTOR] [--base-commit SHA] [--slug S]
+          start       Start a session.   --task ID [--by ACTOR] [--base-commit SHA] [--slug S] [--ephemeral]
           claim       Claim a session.   <id> --by ACTOR [--base-commit SHA] [--force]
           checkpoint  Add a checkpoint.  <id> --title T [--body TEXT]
           record      Add a record.      <id> --kind decision|assumption --title T [--body TEXT]

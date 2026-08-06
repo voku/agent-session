@@ -31,6 +31,7 @@ final class SessionStore
         ?string $slug = null,
         ?string $by = null,
         ?string $baseCommit = null,
+        bool $ephemeral = false,
     ): Session {
         $taskId = trim($taskId);
         if ($taskId === '') {
@@ -58,6 +59,7 @@ final class SessionStore
             $now,
             [],
             $path,
+            $ephemeral,
         );
 
         $this->writeMetadata($session);
@@ -93,6 +95,7 @@ final class SessionStore
             $this->stringField($data, 'updated_at') ?? $this->now(),
             $this->checkpointsField($data),
             $path,
+            ($data['ephemeral'] ?? false) === true,
         );
     }
 
@@ -133,6 +136,7 @@ final class SessionStore
             $this->now(),
             $session->checkpoints,
             $session->path,
+            $session->ephemeral,
         );
         $this->writeMetadata($updated);
 
@@ -152,6 +156,7 @@ final class SessionStore
             $this->now(),
             $session->checkpoints,
             $session->path,
+            $session->ephemeral,
         );
         $this->writeMetadata($updated);
 
@@ -189,6 +194,7 @@ final class SessionStore
             $now,
             $checkpoints,
             $session->path,
+            $session->ephemeral,
         );
         $this->writeMetadata($updated);
 
@@ -290,6 +296,7 @@ final class SessionStore
             $this->now(),
             $session->checkpoints,
             $session->path,
+            $session->ephemeral,
         );
         $this->writeMetadata($updated);
     }

@@ -47,6 +47,35 @@ final class CliTest extends TestCase
         self::assertNotEmpty($matches);
     }
 
+    public function testAnEphemeralSessionIsMarkedAsSuchAndSurvivesAReload(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'task.experiment', '--root', $this->root, '--ephemeral']));
+
+        $store = new SessionStore();
+        $session = $store->load($this->root, $this->firstSessionId());
+        self::assertTrue($session->ephemeral, 'an experiment must stay distinguishable from governed work');
+        self::assertTrue($session->toArray()['ephemeral']);
+
+        // Closing must not silently promote or demote it.
+        $closed = $store->setStatus($session, SessionStatus::DROPPED);
+        self::assertTrue($closed->ephemeral);
+        self::assertTrue($store->load($this->root, $session->id)->ephemeral);
+    }
+
+    public function testASessionWrittenBeforeTheFlagExistedCountsAsGoverned(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'task.legacy', '--root', $this->root]));
+        $id = $this->firstSessionId();
+        $file = $this->root . '/' . $id . '/session.json';
+        $data = json_decode((string) file_get_contents($file), true);
+        self::assertIsArray($data);
+        unset($data['ephemeral']);
+        file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+
+        // Defaulting the other way would let an old session quietly escape every repository gate.
+        self::assertFalse((new SessionStore())->load($this->root, $id)->ephemeral);
+    }
+
     public function testStartRequiresTask(): void
     {
         self::assertSame(1, $this->invoke(['start', '--root', $this->root]));

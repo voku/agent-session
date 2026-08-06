@@ -26,6 +26,12 @@ final readonly class Session
         public string $updatedAt,
         public array $checkpoints,
         public string $path,
+        /**
+         * An experiment, not governed work: created to try a command out, never approved, and never
+         * meant to be finished. Repository-wide gates must ignore it, because a throwaway that
+         * blocks every other session's close is a gate punishing the wrong thing.
+         */
+        public bool $ephemeral = false,
     ) {
     }
 
@@ -45,6 +51,7 @@ final readonly class Session
             'created_at' => $this->createdAt,
             'updated_at' => $this->updatedAt,
             'checkpoints' => $this->checkpoints,
+            'ephemeral' => $this->ephemeral,
         ];
     }
 }

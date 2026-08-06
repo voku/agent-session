@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.0 - 2026-08-06
+
+### Added
+
+- `session start --ephemeral` marks a session as an experiment: created to try a
+  command out, never approved, never meant to be finished. The flag is persisted
+  as `ephemeral` in `session.json` and survives reload and status changes.
+  `Session::$ephemeral` defaults to `false`, so a session written before the flag
+  existed still counts as governed work - defaulting the other way would let old
+  sessions quietly escape every repository gate.
+
+### Why
+
+- A throwaway session created during a dogfood run failed the repository-wide
+  `agent-loop verify` for every other session until it was explicitly dropped.
+  The gate was correct; the model was missing a way to say "this was never
+  governed work".
+
 ## [0.2.2] - 2026-08-02
 
 ### Added
