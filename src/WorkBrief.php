@@ -21,6 +21,8 @@ final readonly class WorkBrief
      * @param list<string> $tags Project-defined relevance labels (domain, system, capability,
      *        or any other taxonomy), independent of directory layout. Recall consumers may match
      *        facts against these in addition to path scope.
+     * @param list<OperatingPromptSelection> $operatingPrompts Approved reusable prompt recipes and
+     *        explicit task-policy arguments. Resolution/rendering belongs to the recall layer.
      */
     public function __construct(
         public string $taskId,
@@ -35,6 +37,8 @@ final readonly class WorkBrief
         public string $path,
         public array $tags = [],
         public array $behaviorAnchors = [],
+        public ?string $operatingPromptManifest = null,
+        public array $operatingPrompts = [],
     ) {
     }
 
@@ -52,6 +56,11 @@ final readonly class WorkBrief
             'validation' => $this->validation,
             'tags' => $this->tags,
             'behavior_anchors' => $this->behaviorAnchors,
+            'operating_prompt_manifest' => $this->operatingPromptManifest,
+            'operating_prompts' => array_map(
+                static fn (OperatingPromptSelection $selection): array => $selection->toArray(),
+                $this->operatingPrompts,
+            ),
             'status' => $this->status->value,
             'revision' => $this->revision,
             'created_at' => $this->createdAt,
