@@ -33,6 +33,7 @@ final class ValidationEvidenceStore
         if ($exitCode < 0) {
             throw new RuntimeException('Validation evidence requires a non-negative --exit-code.');
         }
+        $this->assertPassingExitCode($status, $exitCode);
         if ($durationMs !== null && $durationMs < 0) {
             throw new RuntimeException('--duration-ms must be non-negative.');
         }
@@ -96,6 +97,7 @@ final class ValidationEvidenceStore
             if ($status === null || !is_int($data['work_brief_revision'] ?? null) || $data['work_brief_revision'] < 1 || !is_string($data['command'] ?? null) || trim($data['command']) === '' || !is_int($data['exit_code'] ?? null) || $data['exit_code'] < 0 || !is_string($data['executed_at'] ?? null)) {
                 throw new RuntimeException('Invalid validation evidence record.');
             }
+            $this->assertPassingExitCode($status, $data['exit_code']);
             $duration = $data['duration_ms'] ?? null;
             if ($duration !== null && (!is_int($duration) || $duration < 0)) {
                 throw new RuntimeException('Invalid validation evidence duration.');
@@ -114,6 +116,13 @@ final class ValidationEvidenceStore
         }
 
         return $evidence;
+    }
+
+    private function assertPassingExitCode(ValidationStatus $status, int $exitCode): void
+    {
+        if ($status === ValidationStatus::PASSED && $exitCode !== 0) {
+            throw new RuntimeException('Passing validation evidence requires exit code 0.');
+        }
     }
 
     private function path(Session $session): string
