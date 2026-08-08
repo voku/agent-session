@@ -21,7 +21,7 @@ final readonly class OperatingPromptSelection
     public array $arguments;
 
     /**
-     * @param array<string, bool|int|string> $arguments
+     * @param array<string, mixed> $arguments
      */
     public function __construct(string $id, array $arguments = [])
     {
@@ -30,18 +30,20 @@ final readonly class OperatingPromptSelection
             throw new InvalidArgumentException('Operating prompt id must match [a-z][a-z0-9._-]*.');
         }
 
+        $typedArguments = [];
         foreach ($arguments as $name => $value) {
-            if (!is_string($name) || preg_match('/^[a-z][a-z0-9_]*$/', $name) !== 1) {
+            if (preg_match('/^[a-z][a-z0-9_]*$/', $name) !== 1) {
                 throw new InvalidArgumentException('Operating prompt argument names must match [a-z][a-z0-9_]*.');
             }
             if (!is_bool($value) && !is_int($value) && !is_string($value)) {
                 throw new InvalidArgumentException('Operating prompt arguments must be bool, int, or string.');
             }
+            $typedArguments[$name] = $value;
         }
 
-        ksort($arguments);
+        ksort($typedArguments);
         $this->id = $id;
-        $this->arguments = $arguments;
+        $this->arguments = $typedArguments;
     }
 
     /**
@@ -59,15 +61,8 @@ final readonly class OperatingPromptSelection
             throw new InvalidArgumentException('Operating prompt selection arguments must be an object.');
         }
 
-        $typed = [];
-        foreach ($arguments as $name => $value) {
-            if (!is_string($name) || (!is_bool($value) && !is_int($value) && !is_string($value))) {
-                throw new InvalidArgumentException('Operating prompt arguments must map string names to bool, int, or string values.');
-            }
-            $typed[$name] = $value;
-        }
-
-        return new self($id, $typed);
+        /** @var array<string, mixed> $arguments */
+        return new self($id, $arguments);
     }
 
     public static function fromJson(string $json): self
