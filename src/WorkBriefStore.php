@@ -27,15 +27,39 @@ final class WorkBriefStore
      * @param list<string> $validation
      * @param list<string> $tags
      * @param list<string> $behaviorAnchors
+     * @param list<OperatingPromptSelection> $operatingPrompts
      */
-    public function create(Session $session, string $goal, array $scope, array $nonGoals, array $validation, array $tags = [], array $behaviorAnchors = []): WorkBrief
-    {
+    public function create(
+        Session $session,
+        string $goal,
+        array $scope,
+        array $nonGoals,
+        array $validation,
+        array $tags = [],
+        array $behaviorAnchors = [],
+        ?string $operatingPromptManifest = null,
+        array $operatingPrompts = [],
+    ): WorkBrief {
         if ($this->find($session) !== null) {
             throw new RuntimeException(sprintf("Session '%s' already has a work brief. Use revise instead.", $session->id));
         }
 
         $now = $this->now();
-        $brief = $this->newBrief($session, $goal, $scope, $nonGoals, $validation, $tags, $behaviorAnchors, WorkBriefStatus::CANDIDATE, 1, $now, $now);
+        $brief = $this->newBrief(
+            $session,
+            $goal,
+            $scope,
+            $nonGoals,
+            $validation,
+            $tags,
+            $behaviorAnchors,
+            $operatingPromptManifest,
+            $operatingPrompts,
+            WorkBriefStatus::CANDIDATE,
+            1,
+            $now,
+            $now,
+        );
         $this->writeBrief($brief);
 
         return $brief;
@@ -108,6 +132,8 @@ final class WorkBriefStore
             $brief->path,
             $brief->tags,
             $brief->behaviorAnchors,
+            $brief->operatingPromptManifest,
+            $brief->operatingPrompts,
         );
         $this->writeBrief($approved);
 
@@ -123,9 +149,19 @@ final class WorkBriefStore
      * @param list<string> $validation
      * @param list<string> $tags
      * @param list<string> $behaviorAnchors
+     * @param list<OperatingPromptSelection> $operatingPrompts
      */
-    public function revise(Session $session, string $goal, array $scope, array $nonGoals, array $validation, array $tags = [], array $behaviorAnchors = []): WorkBrief
-    {
+    public function revise(
+        Session $session,
+        string $goal,
+        array $scope,
+        array $nonGoals,
+        array $validation,
+        array $tags = [],
+        array $behaviorAnchors = [],
+        ?string $operatingPromptManifest = null,
+        array $operatingPrompts = [],
+    ): WorkBrief {
         $previous = $this->load($session);
         $now = $this->now();
         $brief = $this->newBrief(
@@ -136,6 +172,8 @@ final class WorkBriefStore
             $validation,
             $tags,
             $behaviorAnchors,
+            $operatingPromptManifest,
+            $operatingPrompts,
             WorkBriefStatus::CANDIDATE,
             $previous->revision + 1,
             $now,
@@ -170,6 +208,8 @@ final class WorkBriefStore
             $directory . '/' . $this->historyFilename($brief->revision),
             $brief->tags,
             $brief->behaviorAnchors,
+            $brief->operatingPromptManifest,
+            $brief->operatingPrompts,
         );
         $this->writeJson($superseded->path, $superseded->toArray());
 
@@ -184,6 +224,7 @@ final class WorkBriefStore
      * @param list<string> $validation
      * @param list<string> $tags
      * @param list<string> $behaviorAnchors
+     * @param list<OperatingPromptSelection> $operatingPrompts
      */
     private function newBrief(
         Session $session,
@@ -193,6 +234,8 @@ final class WorkBriefStore
         array $validation,
         array $tags,
         array $behaviorAnchors,
+        ?string $operatingPromptManifest,
+        array $operatingPrompts,
         WorkBriefStatus $status,
         int $revision,
         string $createdAt,
@@ -213,6 +256,12 @@ final class WorkBriefStore
             throw new RuntimeException('A work brief requires at least one --validation command.');
         }
 
+        $operatingPromptManifest = $this->normalizedOptionalString($operatingPromptManifest);
+        $operatingPrompts = $this->normalizedOperatingPrompts($operatingPrompts);
+        if ($operatingPrompts !== [] && $operatingPromptManifest === null) {
+            throw new RuntimeException('A work brief with operating prompts requires an explicit operating-prompt manifest path.');
+        }
+
         return new WorkBrief(
             $session->taskId,
             $goal,
@@ -226,6 +275,8 @@ final class WorkBriefStore
             $this->workBriefPath($session),
             $this->normalizedLines($tags),
             $this->normalizedLines($behaviorAnchors),
+            $operatingPromptManifest,
+            $operatingPrompts,
         );
     }
 
@@ -252,6 +303,19 @@ final class WorkBriefStore
 
     private function renderMarkdown(WorkBrief $brief): string
     {
+        $promptLines = $brief->operatingPrompts === []
+            ? ['- None selected.']
+            : array_map(
+                static function (OperatingPromptSelection $selection): string {
+                    $arguments = $selection->arguments === []
+                        ? ''
+                        : ' ' . json_encode($selection->arguments, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+                    return '- `' . $selection->id . '`' . $arguments;
+                },
+                $brief->operatingPrompts,
+            );
+
         $lines = [
             '# Work brief: ' . $brief->taskId,
             '',
@@ -278,6 +342,11 @@ final class WorkBriefStore
             '',
             ...array_map(static fn (string $item): string => '- `' . $item . '`', $brief->validation),
             '',
+            '## Operating prompt policy',
+            '',
+            '- Manifest: ' . ($brief->operatingPromptManifest === null ? 'None.' : '`' . $brief->operatingPromptManifest . '`'),
+            ...$promptLines,
+            '',
             '## Relevance tags',
             '',
             ...($brief->tags === [] ? ['- None recorded.'] : array_map(static fn (string $item): string => '- `' . $item . '`', $brief->tags)),
@@ -303,6 +372,12 @@ final class WorkBriefStore
             throw new RuntimeException(sprintf('Unsupported work-brief status in %s: %s', $jsonPath, $statusValue));
         }
 
+        $operatingPromptManifest = $this->optionalStringField($data, 'operating_prompt_manifest', $jsonPath);
+        $operatingPrompts = $this->operatingPromptField($data, $jsonPath);
+        if ($operatingPrompts !== [] && $operatingPromptManifest === null) {
+            throw new RuntimeException(sprintf('Work brief %s selects operating prompts without an operating_prompt_manifest.', $jsonPath));
+        }
+
         return new WorkBrief(
             $taskId,
             $this->requiredString($data, 'goal', $jsonPath),
@@ -316,6 +391,8 @@ final class WorkBriefStore
             $briefPath,
             $this->listField($data, 'tags', $jsonPath),
             $this->listField($data, 'behavior_anchors', $jsonPath),
+            $operatingPromptManifest,
+            $operatingPrompts,
         );
     }
 
@@ -363,6 +440,31 @@ final class WorkBriefStore
     /**
      * @param array<string, mixed> $data
      */
+    private function optionalStringField(array $data, string $field, string $path): ?string
+    {
+        if (!array_key_exists($field, $data) || $data[$field] === null) {
+            return null;
+        }
+        if (!is_string($data[$field]) || trim($data[$field]) === '') {
+            throw new RuntimeException(sprintf('Work brief %s requires %s to be a non-empty string or null.', $path, $field));
+        }
+
+        return trim($data[$field]);
+    }
+
+    private function normalizedOptionalString(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        $value = trim($value);
+
+        return $value === '' ? null : $value;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
     private function positiveInt(array $data, string $field, string $path): int
     {
         $value = $data[$field] ?? null;
@@ -393,6 +495,33 @@ final class WorkBriefStore
     }
 
     /**
+     * @param array<string, mixed> $data
+     * @return list<OperatingPromptSelection>
+     */
+    private function operatingPromptField(array $data, string $path): array
+    {
+        $value = $data['operating_prompts'] ?? [];
+        if (!is_array($value)) {
+            throw new RuntimeException(sprintf('Work brief %s requires a list for operating_prompts.', $path));
+        }
+
+        $prompts = [];
+        foreach ($value as $entry) {
+            if (!is_array($entry)) {
+                throw new RuntimeException(sprintf('Work brief %s operating_prompts entries must be objects.', $path));
+            }
+            try {
+                /** @var array<string, mixed> $entry */
+                $prompts[] = OperatingPromptSelection::fromArray($entry);
+            } catch (\InvalidArgumentException $exception) {
+                throw new RuntimeException(sprintf('Invalid operating prompt in %s: %s', $path, $exception->getMessage()), 0, $exception);
+            }
+        }
+
+        return $this->normalizedOperatingPrompts($prompts);
+    }
+
+    /**
      * @param array<mixed> $values
      * @return list<string>
      */
@@ -407,6 +536,28 @@ final class WorkBriefStore
             if ($value !== '' && !in_array($value, $normalized, true)) {
                 $normalized[] = $value;
             }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<mixed> $values
+     * @return list<OperatingPromptSelection>
+     */
+    private function normalizedOperatingPrompts(array $values): array
+    {
+        $normalized = [];
+        $seen = [];
+        foreach ($values as $value) {
+            if (!$value instanceof OperatingPromptSelection) {
+                throw new RuntimeException('Work-brief operating prompts must be OperatingPromptSelection values.');
+            }
+            if (isset($seen[$value->id])) {
+                throw new RuntimeException('Work brief selects operating prompt more than once: ' . $value->id);
+            }
+            $seen[$value->id] = true;
+            $normalized[] = $value;
         }
 
         return $normalized;
