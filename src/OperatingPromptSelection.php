@@ -15,13 +15,15 @@ use JsonException;
  */
 final readonly class OperatingPromptSelection
 {
+    public string $id;
+
     /** @var array<string, bool|int|string> */
     public array $arguments;
 
     /**
      * @param array<string, bool|int|string> $arguments
      */
-    public function __construct(public string $id, array $arguments = [])
+    public function __construct(string $id, array $arguments = [])
     {
         $id = trim($id);
         if ($id === '' || preg_match('/^[a-z][a-z0-9._-]*$/', $id) !== 1) {
@@ -38,6 +40,7 @@ final readonly class OperatingPromptSelection
         }
 
         ksort($arguments);
+        $this->id = $id;
         $this->arguments = $arguments;
     }
 
