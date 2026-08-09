@@ -5,6 +5,35 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.0 - 2026-08-09
+
+### Added
+
+- Work briefs can now seal an explicit operating-prompt policy together with the
+  task goal, scope, non-goals, validation commands, tags, and behavior anchors.
+  The policy contains an optional manifest source plus typed prompt selections
+  with deterministic `bool|int|string` arguments. This lets an orchestrator such
+  as `voku/agent-loop` approve the L2 recipe and its thresholds as part of the
+  same revision that authorizes the implementation.
+- Added the typed `OperatingPromptSelection` value object and JSON projection for
+  operating-prompt selections. Prompt identifiers and arguments are normalized
+  and validated before they enter the WorkBrief rather than being carried as
+  unstructured orchestration metadata.
+
+### Changed
+
+- Revising operating-prompt policy creates a new candidate WorkBrief revision,
+  archives the previous revision, and invalidates its approval exactly like a
+  goal, scope, or validation change. Historical approvals therefore cannot
+  silently authorize different prompt policy or weaker thresholds.
+- `dev-main` now follows the `0.4.x-dev` release line.
+
+### Fixed
+
+- Validation evidence cannot claim `status=passed` with a non-zero exit code.
+  Contradictory execution evidence is rejected instead of being persisted as a
+  successful validation result.
+
 ## 0.3.0 - 2026-08-06
 
 ### Added
