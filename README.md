@@ -18,7 +18,7 @@ Each session is one directory under a sessions root (default `session_plan/`):
 session_plan/
   2026-06-07-remove-session-access/
     session.json        # metadata: task id, status, claim, base commit, checkpoints
-    work-brief.json     # versioned candidate/approved scope contract (created on demand)
+    work-brief.json     # versioned candidate/approved task-policy contract (created on demand)
     work-brief.md       # human-readable projection of the current brief
     approval.json       # current approval metadata, only when the current brief is approved
     work-brief-history/ # superseded briefs and their historical approvals
@@ -38,18 +38,31 @@ session_plan/
 
 `work-brief.json` is intentionally separate from mutable plan notes. It records
 the task goal, approved scope, non-goals, validation commands, optional behavior
-anchors, a schema version, and a revision/status (`candidate`, `approved`, or
-`superseded`). A behavior anchor names the real request, runtime, consumer, data,
-or integration boundary that owns a behavioral change; documentation-only work
-may deliberately have none. Changing the
-brief creates a new candidate revision, archives the prior revision, and
-invalidates its approval. Existing sessions without a work brief remain valid.
+anchors, optional relevance tags, and optional operating-prompt policy, plus a
+schema version and revision/status (`candidate`, `approved`, or `superseded`).
+A behavior anchor names the real request, runtime, consumer, data, or integration
+boundary that owns a behavioral change; documentation-only work may deliberately
+have none.
+
+Operating-prompt policy is part of the same approval boundary. A WorkBrief may
+carry an explicit prompt-manifest source and typed prompt selections with
+`bool|int|string` arguments. The selection is policy, not generated prompt text:
+`agent-session` seals which recipe and thresholds were approved, while a consumer
+such as `voku/agent-recall-compiler` can combine that policy with current project
+evidence to construct a project-specific execution prompt. `voku/agent-loop`
+provides the user-facing workflow commands for that governed L2 -> L1 flow.
+
+Changing goal, scope, validation, anchors, tags, prompt manifest, or prompt
+selection creates a new candidate revision, archives the prior revision, and
+invalidates its approval. Existing sessions without a work brief or without
+operating-prompt policy remain valid.
 
 `validation-evidence.jsonl` records actual executions against the brief revision
-that required them. Re-planning does not delete old evidence; the next workflow
-can therefore show it as stale instead of accidentally treating it as proof for
-the new scope. `learning-decision.json` makes forgetting explicit: a completed
-session records whether it produced findings, no durable learning, or a follow-up.
+that required them. A record cannot claim `passed` with a non-zero exit code.
+Re-planning does not delete old evidence; the next workflow can therefore show it
+as stale instead of accidentally treating it as proof for the new scope.
+`learning-decision.json` makes forgetting explicit: a completed session records
+whether it produced findings, no durable learning, or a follow-up.
 
 ## Requirements
 
@@ -88,20 +101,25 @@ agent-session prune --keep-days 30 --status done,dropped --dry-run
 
 Use `--root PATH` to point at a sessions directory other than `<cwd>/session_plan`.
 
+The standalone `agent-session brief` CLI intentionally stays focused on the
+basic brief lifecycle. Orchestrators can use the typed `WorkBriefStore` /
+`OperatingPromptSelection` API when they need to seal operating-prompt policy;
+`agent-loop workflow plan` is the primary integrated CLI for that path.
+
 ## Where it fits
 
 This is one layer of the loop. It pairs with:
 
 - `voku/agent-kanban` — the durable tasks the sessions serve.
 - `voku/agent-learning` — findings/proposals distilled *from* a finished session.
-- `voku/agent-recall-compiler` — the briefing compiled *before* a session.
-- `voku/agent-loop` — the unified `agent-loop` binary that exposes all of them (`agent-loop session …`).
+- `voku/agent-recall-compiler` — deterministic recall and project-specific prompt construction from the approved brief.
+- `voku/agent-loop` — the unified `agent-loop` binary that exposes and governs the cross-package lifecycle (`agent-loop session …`, `agent-loop workflow …`).
 
 ## Development
 
 ```bash
 composer install
-composer ci   # validate + phpunit + phpstan (level 8)
+composer ci   # validate + phpunit + phpstan
 ```
 
 ## License
