@@ -7,7 +7,7 @@ namespace voku\AgentSession;
 use Throwable;
 
 /**
- * Hand-rolled CLI for the working-memory layer.
+ * Hand-rolled CLI for run-scoped working memory.
  *
  * Sessions live under a sessions root (default `<cwd>/session_plan`). Override
  * with `--root`.
@@ -15,26 +15,17 @@ use Throwable;
 final class Cli
 {
     private readonly SessionStore $store;
-    private readonly WorkBriefStore $workBriefs;
     private readonly ValidationEvidenceStore $validationEvidence;
-    private readonly LearningDecisionStore $learningDecisions;
 
     public function __construct(
         ?SessionStore $store = null,
-        ?WorkBriefStore $workBriefs = null,
         ?ValidationEvidenceStore $validationEvidence = null,
-        ?LearningDecisionStore $learningDecisions = null,
-    )
-    {
+    ) {
         $this->store = $store ?? new SessionStore();
-        $this->workBriefs = $workBriefs ?? new WorkBriefStore();
         $this->validationEvidence = $validationEvidence ?? new ValidationEvidenceStore();
-        $this->learningDecisions = $learningDecisions ?? new LearningDecisionStore();
     }
 
-    /**
-     * @param list<string> $argv
-     */
+    /** @param list<string> $argv */
     public function run(array $argv): int
     {
         $tokens = $argv;
@@ -50,23 +41,19 @@ final class Cli
                 'close' => $this->closeCommand($tokens),
                 'list' => $this->listCommand($tokens),
                 'show' => $this->showCommand($tokens),
-                'brief' => $this->briefCommand($tokens),
                 'validation' => $this->validationCommand($tokens),
-                'learning' => $this->learningCommand($tokens),
                 'prune' => $this->pruneCommand($tokens),
                 'help', '--help', '-h' => $this->helpCommand(),
                 default => $this->unknownCommand($command),
             };
         } catch (Throwable $e) {
-            fwrite(\STDERR, 'Error: ' . $e->getMessage() . "\n");
+            fwrite(STDERR, 'Error: ' . $e->getMessage() . "\n");
 
             return 1;
         }
     }
 
-    /**
-     * @param list<string> $tokens
-     */
+    /** @param list<string> $tokens */
     private function startCommand(array $tokens): int
     {
         $parsed = $this->parseOptions($tokens);
@@ -81,19 +68,17 @@ final class Cli
             $this->hasFlag($parsed['options'], 'ephemeral'),
         );
 
-        fwrite(\STDOUT, sprintf("Started session: %s\n", $session->id));
-        fwrite(\STDOUT, sprintf("- path: %s\n", $session->path));
-        fwrite(\STDOUT, "- working-memory files: plan.md, assumptions.md, decisions.md, validation.md, checkpoints/\n");
+        fwrite(STDOUT, sprintf("Started session: %s\n", $session->id));
+        fwrite(STDOUT, sprintf("- path: %s\n", $session->path));
+        fwrite(STDOUT, "- working-memory files: plan.md, assumptions.md, decisions.md, validation.md, checkpoints/\n");
         if ($session->ephemeral) {
-            fwrite(\STDOUT, "- ephemeral: repository-wide gates ignore this session; close it when the experiment is over\n");
+            fwrite(STDOUT, "- ephemeral: repository-wide gates ignore this session; close it when the experiment is over\n");
         }
 
         return 0;
     }
 
-    /**
-     * @param list<string> $tokens
-     */
+    /** @param list<string> $tokens */
     private function claimCommand(array $tokens): int
     {
         $parsed = $this->parseOptions($tokens);
@@ -119,14 +104,12 @@ final class Cli
         }
 
         $session = $this->store->claim($session, $by, $this->stringOption($parsed['options'], 'base-commit'));
-        fwrite(\STDOUT, sprintf("Claimed session '%s' for '%s'.\n", $session->id, (string) $session->claimedBy));
+        fwrite(STDOUT, sprintf("Claimed session '%s' for '%s'.\n", $session->id, (string) $session->claimedBy));
 
         return 0;
     }
 
-    /**
-     * @param list<string> $tokens
-     */
+    /** @param list<string> $tokens */
     private function checkpointCommand(array $tokens): int
     {
         $parsed = $this->parseOptions($tokens);
@@ -140,14 +123,12 @@ final class Cli
         );
 
         $last = $session->checkpoints[count($session->checkpoints) - 1] ?? null;
-        fwrite(\STDOUT, sprintf("Recorded checkpoint %s on session '%s'.\n", $last['id'] ?? '?', $session->id));
+        fwrite(STDOUT, sprintf("Recorded checkpoint %s on session '%s'.\n", $last['id'] ?? '?', $session->id));
 
         return 0;
     }
 
-    /**
-     * @param list<string> $tokens
-     */
+    /** @param list<string> $tokens */
     private function recordCommand(array $tokens): int
     {
         $parsed = $this->parseOptions($tokens);
@@ -162,14 +143,12 @@ final class Cli
             $this->stringOption($parsed['options'], 'body') ?? '',
         );
 
-        fwrite(\STDOUT, sprintf("Recorded %s on session '%s'.\n", strtolower(trim($kind)), $session->id));
+        fwrite(STDOUT, sprintf("Recorded %s on session '%s'.\n", strtolower(trim($kind)), $session->id));
 
         return 0;
     }
 
-    /**
-     * @param list<string> $tokens
-     */
+    /** @param list<string> $tokens */
     private function closeCommand(array $tokens): int
     {
         $parsed = $this->parseOptions($tokens);
@@ -183,14 +162,12 @@ final class Cli
         }
 
         $session = $this->store->setStatus($session, $status);
-        fwrite(\STDOUT, sprintf("Closed session '%s' as %s.\n", $session->id, $session->status->value));
+        fwrite(STDOUT, sprintf("Closed session '%s' as %s.\n", $session->id, $session->status->value));
 
         return 0;
     }
 
-    /**
-     * @param list<string> $tokens
-     */
+    /** @param list<string> $tokens */
     private function listCommand(array $tokens): int
     {
         $parsed = $this->parseOptions($tokens);
@@ -203,7 +180,7 @@ final class Cli
             if ($statusFilter !== null && $session->status !== $statusFilter) {
                 continue;
             }
-            fwrite(\STDOUT, sprintf(
+            fwrite(STDOUT, sprintf(
                 "%-40s %-8s task=%s claimed_by=%s\n",
                 $session->id,
                 $session->status->value,
@@ -214,104 +191,20 @@ final class Cli
         }
 
         if ($shown === 0) {
-            fwrite(\STDOUT, "No sessions found.\n");
+            fwrite(STDOUT, "No sessions found.\n");
         }
 
         return 0;
     }
 
-    /**
-     * @param list<string> $tokens
-     */
+    /** @param list<string> $tokens */
     private function showCommand(array $tokens): int
     {
         $parsed = $this->parseOptions($tokens);
         $root = $this->resolveRoot($parsed['options']);
         $session = $this->store->load($root, $this->requireId($parsed['arguments']));
 
-        fwrite(\STDOUT, json_encode($session->toArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n");
-
-        return 0;
-    }
-
-    /**
-     * @param list<string> $tokens
-     */
-    private function briefCommand(array $tokens): int
-    {
-        $action = array_shift($tokens) ?? 'help';
-        if (in_array($action, ['help', '--help', '-h'], true)) {
-            return $this->briefHelpCommand();
-        }
-
-        $parsed = $this->parseOptions($tokens);
-        $root = $this->resolveRoot($parsed['options']);
-        $session = $this->store->load($root, $this->requireId($parsed['arguments']));
-
-        return match ($action) {
-            'create' => $this->createBriefCommand($session, $parsed['options']),
-            'revise' => $this->reviseBriefCommand($session, $parsed['options']),
-            'approve' => $this->approveBriefCommand($session, $parsed['options']),
-            'show' => $this->showBriefCommand($session),
-            default => $this->unknownBriefAction($action),
-        };
-    }
-
-    /**
-     * @param array<string, list<string>> $options
-     */
-    private function createBriefCommand(Session $session, array $options): int
-    {
-        $brief = $this->workBriefs->create(
-            $session,
-            $this->stringOption($options, 'goal') ?? '',
-            $this->stringOptions($options, 'scope'),
-            $this->stringOptions($options, 'non-goal'),
-            $this->stringOptions($options, 'validation'),
-            $this->stringOptions($options, 'tag'),
-            $this->stringOptions($options, 'behavior-anchor'),
-        );
-        fwrite(STDOUT, sprintf("Created work brief revision %d for session '%s'.\n", $brief->revision, $session->id));
-
-        return 0;
-    }
-
-    /**
-     * @param array<string, list<string>> $options
-     */
-    private function reviseBriefCommand(Session $session, array $options): int
-    {
-        $brief = $this->workBriefs->revise(
-            $session,
-            $this->stringOption($options, 'goal') ?? '',
-            $this->stringOptions($options, 'scope'),
-            $this->stringOptions($options, 'non-goal'),
-            $this->stringOptions($options, 'validation'),
-            $this->stringOptions($options, 'tag'),
-            $this->stringOptions($options, 'behavior-anchor'),
-        );
-        fwrite(STDOUT, sprintf("Created candidate work brief revision %d for session '%s'; prior approval is superseded.\n", $brief->revision, $session->id));
-
-        return 0;
-    }
-
-    /**
-     * @param array<string, list<string>> $options
-     */
-    private function approveBriefCommand(Session $session, array $options): int
-    {
-        $approval = $this->workBriefs->approve($session, $this->stringOption($options, 'by') ?? '');
-        fwrite(STDOUT, sprintf("Approved work brief revision %d for session '%s' by '%s'.\n", $approval->workBriefRevision, $session->id, $approval->approvedBy));
-
-        return 0;
-    }
-
-    private function showBriefCommand(Session $session): int
-    {
-        $brief = $this->workBriefs->load($session);
-        $data = $brief->toArray();
-        $data['approval'] = $this->workBriefs->approval($session)?->toArray();
-        fwrite(STDOUT, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n");
+        fwrite(STDOUT, json_encode($session->toArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n");
 
         return 0;
     }
@@ -321,7 +214,7 @@ final class Cli
     {
         $action = array_shift($tokens) ?? 'help';
         if (in_array($action, ['help', '--help', '-h'], true)) {
-            fwrite(STDOUT, "Usage: agent-session validation record <id> --brief-revision N --command COMMAND --status passed|failed --exit-code N [--duration-ms N] [--by ACTOR] [--note TEXT]\n");
+            fwrite(STDOUT, "Usage: agent-session validation record <id> --contract-revision N --command COMMAND --status passed|failed --exit-code N [--duration-ms N] [--by ACTOR] [--note TEXT]\n");
 
             return 0;
         }
@@ -330,7 +223,7 @@ final class Cli
         }
         $parsed = $this->parseOptions($tokens);
         $session = $this->store->load($this->resolveRoot($parsed['options']), $this->requireId($parsed['arguments']));
-        $revision = $this->requiredPositiveInt($this->stringOption($parsed['options'], 'brief-revision'), '--brief-revision');
+        $revision = $this->requiredPositiveInt($this->stringOption($parsed['options'], 'contract-revision'), '--contract-revision');
         $exitCode = $this->requiredNonNegativeInt($this->stringOption($parsed['options'], 'exit-code'), '--exit-code');
         $duration = $this->stringOption($parsed['options'], 'duration-ms');
         $durationMs = $duration === null ? null : $this->requiredNonNegativeInt($duration, '--duration-ms');
@@ -338,62 +231,46 @@ final class Cli
         if ($status === null) {
             throw new \InvalidArgumentException('--status must be passed or failed.');
         }
-        $evidence = $this->validationEvidence->record($session, $revision, $this->stringOption($parsed['options'], 'command') ?? '', $status, $exitCode, $durationMs, $this->stringOption($parsed['options'], 'by'), $this->stringOption($parsed['options'], 'note'));
-        fwrite(STDOUT, sprintf("Recorded %s validation evidence for work brief revision %d on session '%s'.\n", $evidence->status->value, $evidence->workBriefRevision, $session->id));
+        $evidence = $this->validationEvidence->record(
+            $session,
+            $revision,
+            $this->stringOption($parsed['options'], 'command') ?? '',
+            $status,
+            $exitCode,
+            $durationMs,
+            $this->stringOption($parsed['options'], 'by'),
+            $this->stringOption($parsed['options'], 'note'),
+        );
+        fwrite(STDOUT, sprintf(
+            "Recorded %s validation evidence for Contract revision %d on session '%s'.\n",
+            $evidence->status->value,
+            $evidence->contractRevision,
+            $session->id,
+        ));
 
         return 0;
     }
 
     /** @param list<string> $tokens */
-    private function learningCommand(array $tokens): int
-    {
-        $action = array_shift($tokens) ?? 'help';
-        if (in_array($action, ['help', '--help', '-h'], true)) {
-            fwrite(STDOUT, "Usage: agent-session learning decide <id> --status findings_recorded|no_durable_learning|follow_up_required --by ACTOR [--reason TEXT]\n");
-
-            return 0;
-        }
-        if ($action !== 'decide') {
-            throw new \InvalidArgumentException('Unknown learning action: ' . $action);
-        }
-        $parsed = $this->parseOptions($tokens);
-        $session = $this->store->load($this->resolveRoot($parsed['options']), $this->requireId($parsed['arguments']));
-        $decision = LearningDecision::tryFrom($this->stringOption($parsed['options'], 'status') ?? '');
-        if ($decision === null) {
-            throw new \InvalidArgumentException('--status must be findings_recorded, no_durable_learning, or follow_up_required.');
-        }
-        $record = $this->learningDecisions->decide($session, $decision, $this->stringOption($parsed['options'], 'by') ?? '', $this->stringOption($parsed['options'], 'reason'));
-        fwrite(STDOUT, sprintf("Recorded learning decision %s for session '%s'.\n", $record->decision->value, $session->id));
-
-        return 0;
-    }
-
-    /**
-     * @param list<string> $tokens
-     */
     private function pruneCommand(array $tokens): int
     {
         $parsed = $this->parseOptions($tokens);
         $root = $this->resolveRoot($parsed['options']);
         $keepDays = (int) ($this->stringOption($parsed['options'], 'keep-days') ?? '30');
         $dryRun = $this->hasFlag($parsed['options'], 'dry-run');
-
         $statuses = $this->parseStatuses($this->stringOption($parsed['options'], 'status') ?? 'done,dropped');
 
         $removed = $this->store->prune($root, $keepDays, $statuses, $dryRun);
-
         $verb = $dryRun ? 'Would prune' : 'Pruned';
-        fwrite(\STDOUT, sprintf("%s %d session(s) older than %d day(s).\n", $verb, count($removed), $keepDays));
+        fwrite(STDOUT, sprintf("%s %d session(s) older than %d day(s).\n", $verb, count($removed), $keepDays));
         foreach ($removed as $id) {
-            fwrite(\STDOUT, '- ' . $id . "\n");
+            fwrite(STDOUT, '- ' . $id . "\n");
         }
 
         return 0;
     }
 
-    /**
-     * @return list<SessionStatus>
-     */
+    /** @return list<SessionStatus> */
     private function parseStatuses(string $value): array
     {
         $statuses = [];
@@ -409,8 +286,8 @@ final class Cli
 
     private function helpCommand(): int
     {
-        fwrite(\STDOUT, <<<TXT
-        agent-session - working memory for coding-agent tasks.
+        fwrite(STDOUT, <<<TXT
+        agent-session - pruneable working memory for coding-agent Runs.
 
         Usage:
           agent-session <command> [options]
@@ -423,10 +300,11 @@ final class Cli
           close       Close a session.   <id> --status done|dropped
           list        List sessions.     [--status STATUS]
           show        Show metadata.     <id>
-          brief       Manage a work brief. <create|revise|approve|show> <id> [options]
-          validation  Record structured validation evidence. <record> <id> [options]
-          learning    Record a task learning decision. <decide> <id> [options]
+          validation  Record run-local validation observation. <record> <id> [options]
           prune       Retention cleanup. [--keep-days N] [--status done,dropped] [--dry-run]
+
+        Durable Contract/approval is owned by agent-loop. Durable Learning close-out is owned by agent-learning.
+        Session data is working memory and may be pruned after the governed Run has durable close evidence.
 
         Global:
           --root PATH   Sessions root directory (default: <cwd>/session_plan).
@@ -436,56 +314,15 @@ final class Cli
         return 0;
     }
 
-    private function briefHelpCommand(): int
-    {
-        fwrite(STDOUT, <<<TXT
-        agent-session brief - versioned work-brief and approval artifacts.
-
-        Usage:
-          agent-session brief create <id> --goal TEXT --scope PATH [--scope PATH] [--non-goal TEXT] --validation COMMAND [--validation COMMAND] [--tag LABEL] [--behavior-anchor TEXT]
-          agent-session brief revise <id> --goal TEXT --scope PATH [--scope PATH] [--non-goal TEXT] --validation COMMAND [--validation COMMAND] [--tag LABEL] [--behavior-anchor TEXT]
-          agent-session brief approve <id> --by ACTOR
-          agent-session brief show <id>
-
-        Revising a brief archives the prior revision as superseded and clears
-        its current approval. The historical work brief and approval remain in
-        work-brief-history/ for audit.
-
-        --tag is an optional, repeatable relevance label (domain, system,
-        capability, or any other taxonomy the project chooses). It is matched
-        by recall consumers independently of --scope paths, so cross-cutting
-        knowledge (e.g. an LDAP learning) can be selected for a task whose
-        files live under an unrelated-looking directory.
-
-        --behavior-anchor is an optional, repeatable description of the real
-        request, runtime, consumer, data, or integration boundary that owns
-        the changed behavior. It is not required for documentation-only or
-        static-only work; record that absence explicitly in the task plan.
-
-        TXT);
-
-        return 0;
-    }
-
-    private function unknownBriefAction(string $action): int
-    {
-        fwrite(STDERR, 'Unknown brief action: ' . $action . "\n");
-        fwrite(STDERR, "Run 'agent-session brief help' to view usage.\n");
-
-        return 1;
-    }
-
     private function unknownCommand(string $command): int
     {
-        fwrite(\STDERR, 'Unknown command: ' . $command . "\n");
-        fwrite(\STDERR, "Run 'agent-session help' to view usage.\n");
+        fwrite(STDERR, 'Unknown command: ' . $command . "\n");
+        fwrite(STDERR, "Run 'agent-session help' to view usage.\n");
 
         return 1;
     }
 
-    /**
-     * @param array<string, list<string>> $options
-     */
+    /** @param array<string, list<string>> $options */
     private function resolveRoot(array $options): string
     {
         $root = $this->stringOption($options, 'root');
@@ -496,9 +333,7 @@ final class Cli
         return (getcwd() ?: '.') . '/session_plan';
     }
 
-    /**
-     * @param list<string> $arguments
-     */
+    /** @param list<string> $arguments */
     private function requireId(array $arguments): string
     {
         $id = $arguments[0] ?? '';
@@ -538,26 +373,13 @@ final class Cli
         return ['options' => $options, 'arguments' => $arguments];
     }
 
-    /**
-     * @param array<string, list<string>> $options
-     */
+    /** @param array<string, list<string>> $options */
     private function stringOption(array $options, string $name): ?string
     {
         return $options[$name][0] ?? null;
     }
 
-    /**
-     * @param array<string, list<string>> $options
-     * @return list<string>
-     */
-    private function stringOptions(array $options, string $name): array
-    {
-        return $options[$name] ?? [];
-    }
-
-    /**
-     * @param array<string, list<string>> $options
-     */
+    /** @param array<string, list<string>> $options */
     private function hasFlag(array $options, string $name): bool
     {
         return isset($options[$name]);
