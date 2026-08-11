@@ -9,7 +9,7 @@ use Throwable;
 /**
  * Hand-rolled CLI for the working-memory layer.
  *
- * Sessions live under a sessions root (default `<cwd>/session_plan`). Override
+ * Sessions live under a sessions root (default `<cwd>/.agent-loop/sessions`). Override
  * with `--root`.
  */
 final class Cli
@@ -429,7 +429,7 @@ final class Cli
           prune       Retention cleanup. [--keep-days N] [--status done,dropped] [--dry-run]
 
         Global:
-          --root PATH   Sessions root directory (default: <cwd>/session_plan).
+          --root PATH   Sessions root directory (default: <cwd>/.agent-loop/sessions).
 
         TXT);
 
@@ -493,7 +493,7 @@ final class Cli
             return $root;
         }
 
-        return (getcwd() ?: '.') . '/session_plan';
+        return (getcwd() ?: '.') . '/.agent-loop/sessions';
     }
 
     /**
