@@ -10,8 +10,16 @@ use voku\AgentSession\Cli;
  * @return list<string>
  */
 $withDefaultRoot = static function (array $arguments): array {
-    foreach ($arguments as $argument) {
-        if ($argument === '--root' || str_starts_with($argument, '--root=')) {
+    foreach ($arguments as $index => $argument) {
+        if ($argument === '--root') {
+            return $arguments;
+        }
+
+        if (str_starts_with($argument, '--root=')) {
+            $root = substr($argument, strlen('--root='));
+            $arguments[$index] = '--root';
+            array_splice($arguments, $index + 1, 0, [$root]);
+
             return $arguments;
         }
     }
@@ -23,7 +31,9 @@ $withDefaultRoot = static function (array $arguments): array {
     }
 
     $arguments[] = '--root';
-    $arguments[] = rtrim(str_replace('\\', '/', $projectRoot), '/') . '/.agent-loop/sessions';
+    $arguments[] = rtrim($projectRoot, DIRECTORY_SEPARATOR)
+        . DIRECTORY_SEPARATOR . '.agent-loop'
+        . DIRECTORY_SEPARATOR . 'sessions';
 
     return $arguments;
 };
