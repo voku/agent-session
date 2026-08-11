@@ -15,7 +15,7 @@ This package keeps that layer explicit, claimable, and bounded.
 Each session is one directory under the sessions root. The standalone CLI now
 defaults to `.agent-loop/sessions/`:
 
-```
+```text
 .agent-loop/
   sessions/
     2026-06-07-remove-session-access/
