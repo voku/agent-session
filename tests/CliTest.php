@@ -47,6 +47,23 @@ final class CliTest extends TestCase
         self::assertNotEmpty($matches);
     }
 
+    public function testPublicCliDefaultsToCompactSessionRoot(): void
+    {
+        $projectRoot = $this->root . '/project';
+        mkdir($projectRoot, 0777, true);
+        $previousCwd = getcwd();
+        self::assertIsString($previousCwd);
+        self::assertTrue(chdir($projectRoot));
+
+        try {
+            self::assertSame(0, $this->invoke(['start', '--task', 'task.default', '--by', 'lars']));
+            self::assertNotEmpty(glob($projectRoot . '/.agent-loop/sessions/*/session.json'));
+            self::assertDirectoryDoesNotExist($projectRoot . '/session_plan');
+        } finally {
+            self::assertTrue(chdir($previousCwd));
+        }
+    }
+
     public function testAnEphemeralSessionIsMarkedAsSuchAndSurvivesAReload(): void
     {
         self::assertSame(0, $this->invoke(['start', '--task', 'task.experiment', '--root', $this->root, '--ephemeral']));
