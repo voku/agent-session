@@ -12,25 +12,27 @@ This package keeps that layer explicit, claimable, and bounded.
 
 ## What it manages
 
-Each session is one directory under a sessions root (default `session_plan/`):
+Each session is one directory under the sessions root. The standalone CLI now
+defaults to `.agent-loop/sessions/`:
 
 ```
-session_plan/
-  2026-06-07-remove-session-access/
-    session.json        # metadata: task id, status, claim, base commit, checkpoints
-    work-brief.json     # versioned candidate/approved task-policy contract (created on demand)
-    work-brief.md       # human-readable projection of the current brief
-    approval.json       # current approval metadata, only when the current brief is approved
-    work-brief-history/ # superseded briefs and their historical approvals
-    plan.md
-    assumptions.md
-    decisions.md
-    validation.md
-    validation-evidence.jsonl # append-only machine-readable validation executions
-    learning-decision.json    # explicit close-out decision (created on demand)
-    checkpoints/
-      index.md
-      001-discovery.md
+.agent-loop/
+  sessions/
+    2026-06-07-remove-session-access/
+      session.json        # metadata: task id, status, claim, base commit, checkpoints
+      work-brief.json     # versioned candidate/approved task-policy contract (created on demand)
+      work-brief.md       # human-readable projection of the current brief
+      approval.json       # current approval metadata, only when the current brief is approved
+      work-brief-history/ # superseded briefs and their historical approvals
+      plan.md
+      assumptions.md
+      decisions.md
+      validation.md
+      validation-evidence.jsonl # append-only machine-readable validation executions
+      learning-decision.json    # explicit close-out decision (created on demand)
+      checkpoints/
+        index.md
+        001-discovery.md
 ```
 
 `session.json` carries the **claim metadata** that makes parallel agents safe:
@@ -99,7 +101,20 @@ agent-session show  2026-06-07-remove-session-access
 agent-session prune --keep-days 30 --status done,dropped --dry-run
 ```
 
-Use `--root PATH` to point at a sessions directory other than `<cwd>/session_plan`.
+Use `--root PATH` to point at a sessions directory other than
+`<cwd>/.agent-loop/sessions`.
+
+### Breaking path migration
+
+Older releases defaulted to `<cwd>/session_plan`. This release deliberately does
+not auto-discover, copy, symlink, or dual-write that directory. Move existing
+working-memory state explicitly if you want to adopt the new default:
+
+```text
+session_plan/ -> .agent-loop/sessions/
+```
+
+Or keep using the old location by passing `--root session_plan` explicitly.
 
 The standalone `agent-session brief` CLI intentionally stays focused on the
 basic brief lifecycle. Orchestrators can use the typed `WorkBriefStore` /
