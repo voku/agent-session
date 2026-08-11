@@ -38,6 +38,23 @@ final class CliTest extends TestCase
         self::assertSame(SessionStatus::DONE, $store->load($this->root, $id)->status);
     }
 
+    public function testPublicCliDefaultsToCompactSessionRoot(): void
+    {
+        $projectRoot = $this->root . '/project';
+        mkdir($projectRoot, 0777, true);
+        $previousCwd = getcwd();
+        self::assertIsString($previousCwd);
+        self::assertTrue(chdir($projectRoot));
+
+        try {
+            self::assertSame(0, $this->invoke(['start', '--task', 'task.default', '--by', 'lars']));
+            self::assertNotEmpty(glob($projectRoot . '/.agent-loop/sessions/*/session.json'));
+            self::assertDirectoryDoesNotExist($projectRoot . '/session_plan');
+        } finally {
+            self::assertTrue(chdir($previousCwd));
+        }
+    }
+
     public function testDurableAuthorityCommandsAreNotCompatibilitySurfaces(): void
     {
         self::assertSame(1, $this->invoke(['brief', 'help']));
