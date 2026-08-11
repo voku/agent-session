@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Changed
+
+- **Breaking:** the standalone CLI now defaults its sessions root to
+  `<cwd>/.agent-loop/sessions` instead of `<cwd>/session_plan`. Explicit
+  `--root` remains authoritative. Existing state is not copied, symlinked, or
+  dual-written; migrate `session_plan/` explicitly or keep selecting it with
+  `--root session_plan`.
+
 ## 0.4.0 - 2026-08-09
 
 ### Added

@@ -5,6 +5,41 @@ declare(strict_types=1);
 
 use voku\AgentSession\Cli;
 
+/**
+ * @param list<string> $arguments
+ * @return list<string>
+ */
+$withDefaultRoot = static function (array $arguments): array {
+    foreach ($arguments as $index => $argument) {
+        if ($argument === '--root') {
+            return $arguments;
+        }
+
+        if (str_starts_with($argument, '--root=')) {
+            $root = substr($argument, strlen('--root='));
+            $arguments[$index] = '--root';
+            array_splice($arguments, $index + 1, 0, [$root]);
+
+            return $arguments;
+        }
+    }
+
+    $projectRoot = getcwd();
+    if ($projectRoot === false || $projectRoot === '') {
+        fwrite(STDERR, "Cannot determine project root for voku/agent-session.\n");
+        exit(1);
+    }
+
+    $arguments[] = '--root';
+    $arguments[] = rtrim($projectRoot, DIRECTORY_SEPARATOR)
+        . DIRECTORY_SEPARATOR . '.agent-loop'
+        . DIRECTORY_SEPARATOR . 'sessions';
+
+    return $arguments;
+};
+
+$argv = $withDefaultRoot($argv);
+
 spl_autoload_register(static function (string $class): void {
     $prefix = 'voku\\AgentSession\\';
     if (!str_starts_with($class, $prefix)) {
