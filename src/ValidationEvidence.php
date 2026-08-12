@@ -8,7 +8,7 @@ final readonly class ValidationEvidence
 {
     public function __construct(
         public string $taskId,
-        public int $workBriefRevision,
+        public int $contractRevision,
         public string $command,
         public ValidationStatus $status,
         public int $exitCode,
@@ -23,9 +23,9 @@ final readonly class ValidationEvidence
     public function toArray(): array
     {
         return [
-            'schema_version' => '1.0',
+            'schema_version' => '2.0',
             'task_id' => $this->taskId,
-            'work_brief_revision' => $this->workBriefRevision,
+            'contract_revision' => $this->contractRevision,
             'command' => $this->command,
             'status' => $this->status->value,
             'exit_code' => $this->exitCode,

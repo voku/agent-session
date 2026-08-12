@@ -5,15 +5,44 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.5.0 - 2026-08-12
+
+Session becomes what its name claims: disposable working memory for one governed
+Run. Everything a Run must still be able to explain after its Session is pruned
+now belongs to the package that owns it.
+
+### Removed
+
+- **Breaking:** Session no longer owns durable approved work. `WorkBrief`,
+  `WorkBriefStatus`, `WorkBriefStore`, `Approval` and `OperatingPromptSelection`
+  are removed. A durable Contract and its approval are owned by `agent-loop`,
+  which persists them before any Session exists.
+- **Breaking:** Session no longer owns Learning close-out. `LearningDecision`,
+  `LearningDecisionRecord` and `LearningDecisionStore` are removed.
+  `agent-learning` owns the durable run Learning decision.
+
+  Both removals delete a real contradiction rather than move code: while Session
+  held them, pruning working memory destroyed the evidence that explained why a
+  Run was allowed to close.
 
 ### Changed
 
+- **Breaking:** validation observations are recorded against an explicit
+  Contract revision, so evidence gathered for a superseded revision is
+  distinguishable from evidence for the current one instead of silently
+  counting.
 - **Breaking:** the standalone CLI now defaults its sessions root to
   `<cwd>/.agent-loop/sessions` instead of `<cwd>/session_plan`. Explicit
   `--root` remains authoritative. Existing state is not copied, symlinked, or
   dual-written; migrate `session_plan/` explicitly or keep selecting it with
   `--root session_plan`.
+
+### Upgrading
+
+Consumers that read Session-owned work briefs, approvals or learning decisions
+must read them from their new owners. There is no compatibility shim: a
+pre-1.0 breaking migration that silently kept answering from the old location
+would reintroduce exactly the ambiguity this release removes.
 
 ## 0.4.0 - 2026-08-09
 

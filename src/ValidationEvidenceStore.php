@@ -15,7 +15,7 @@ final class ValidationEvidenceStore
 
     public function record(
         Session $session,
-        int $workBriefRevision,
+        int $contractRevision,
         string $command,
         ValidationStatus $status,
         int $exitCode,
@@ -24,8 +24,8 @@ final class ValidationEvidenceStore
         ?string $note = null,
     ): ValidationEvidence {
         $command = trim($command);
-        if ($workBriefRevision < 1) {
-            throw new RuntimeException('Validation evidence requires a positive --brief-revision.');
+        if ($contractRevision < 1) {
+            throw new RuntimeException('Validation evidence requires a positive --contract-revision.');
         }
         if ($command === '') {
             throw new RuntimeException('Validation evidence requires a non-empty --command.');
@@ -40,7 +40,7 @@ final class ValidationEvidenceStore
 
         $evidence = new ValidationEvidence(
             $session->taskId,
-            $workBriefRevision,
+            $contractRevision,
             $command,
             $status,
             $exitCode,
@@ -55,8 +55,8 @@ final class ValidationEvidenceStore
         }
 
         $line = sprintf(
-            "\n## Validation evidence (work brief revision %d)\n\n- Command: `%s`\n- Status: %s\n- Exit: %d\n- Executed: %s\n",
-            $evidence->workBriefRevision,
+            "\n## Validation evidence (Contract revision %d)\n\n- Command: `%s`\n- Status: %s\n- Exit: %d\n- Executed: %s\n",
+            $evidence->contractRevision,
             $evidence->command,
             $evidence->status->value,
             $evidence->exitCode,
@@ -90,11 +90,20 @@ final class ValidationEvidenceStore
             } catch (JsonException $exception) {
                 throw new RuntimeException('Invalid validation evidence JSON: ' . $exception->getMessage());
             }
-            if (!is_array($data) || ($data['schema_version'] ?? null) !== '1.0' || ($data['task_id'] ?? null) !== $session->taskId) {
+            if (!is_array($data) || ($data['schema_version'] ?? null) !== '2.0' || ($data['task_id'] ?? null) !== $session->taskId) {
                 throw new RuntimeException('Invalid validation evidence record.');
             }
             $status = is_string($data['status'] ?? null) ? ValidationStatus::tryFrom($data['status']) : null;
-            if ($status === null || !is_int($data['work_brief_revision'] ?? null) || $data['work_brief_revision'] < 1 || !is_string($data['command'] ?? null) || trim($data['command']) === '' || !is_int($data['exit_code'] ?? null) || $data['exit_code'] < 0 || !is_string($data['executed_at'] ?? null)) {
+            if (
+                $status === null
+                || !is_int($data['contract_revision'] ?? null)
+                || $data['contract_revision'] < 1
+                || !is_string($data['command'] ?? null)
+                || trim($data['command']) === ''
+                || !is_int($data['exit_code'] ?? null)
+                || $data['exit_code'] < 0
+                || !is_string($data['executed_at'] ?? null)
+            ) {
                 throw new RuntimeException('Invalid validation evidence record.');
             }
             $this->assertPassingExitCode($status, $data['exit_code']);
@@ -104,7 +113,7 @@ final class ValidationEvidenceStore
             }
             $evidence[] = new ValidationEvidence(
                 $session->taskId,
-                $data['work_brief_revision'],
+                $data['contract_revision'],
                 trim($data['command']),
                 $status,
                 $data['exit_code'],

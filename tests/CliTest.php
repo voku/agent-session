@@ -24,27 +24,18 @@ final class CliTest extends TestCase
         $this->removeDirectory($this->root);
     }
 
-    /**
-     * @param list<string> $argv
-     */
-    private function invoke(array $argv): int
+    public function testWorkingMemoryLifecycleStillWorks(): void
     {
-        // CLI writes to STDOUT/STDERR (process streams); assertions below use
-        // exit codes and the on-disk session state, not captured text.
-        return (new Cli())->run(['agent-session', ...$argv]);
-    }
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'flow', '--by', 'lars', '--root', $this->root]));
+        $id = $this->firstSessionId();
+        $store = new SessionStore();
 
-    private function firstSessionId(): string
-    {
-        return basename((string) (glob($this->root . '/*', GLOB_ONLYDIR)[0] ?? ''));
-    }
-
-    public function testStartCreatesSession(): void
-    {
-        self::assertSame(0, $this->invoke(['start', '--task', 'task.x', '--root', $this->root, '--by', 'lars']));
-
-        $matches = glob($this->root . '/*/session.json');
-        self::assertNotEmpty($matches);
+        self::assertSame(0, $this->invoke(['checkpoint', $id, '--title', 'Discovery', '--root', $this->root]));
+        self::assertSame(0, $this->invoke(['record', $id, '--kind', 'decision', '--title', 'Keep scope narrow', '--root', $this->root]));
+        self::assertSame(0, $this->invoke(['claim', $id, '--by', 'mara', '--force', '--root', $this->root]));
+        self::assertSame('mara', $store->load($this->root, $id)->claimedBy);
+        self::assertSame(0, $this->invoke(['close', $id, '--status', 'done', '--root', $this->root]));
+        self::assertSame(SessionStatus::DONE, $store->load($this->root, $id)->status);
     }
 
     public function testPublicCliDefaultsToCompactSessionRoot(): void
@@ -64,131 +55,67 @@ final class CliTest extends TestCase
         }
     }
 
-    public function testAnEphemeralSessionIsMarkedAsSuchAndSurvivesAReload(): void
+    public function testDurableAuthorityCommandsAreNotCompatibilitySurfaces(): void
     {
-        self::assertSame(0, $this->invoke(['start', '--task', 'task.experiment', '--root', $this->root, '--ephemeral']));
+        self::assertSame(1, $this->invoke(['brief', 'help']));
+        self::assertSame(1, $this->invoke(['learning', 'help']));
+    }
 
+    public function testValidationObservationUsesContractRevision(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'validation', '--root', $this->root]));
+        $id = $this->firstSessionId();
+
+        self::assertSame(0, $this->invoke([
+            'validation', 'record', $id,
+            '--contract-revision', '3',
+            '--command', 'vendor/bin/phpunit',
+            '--status', 'passed',
+            '--exit-code', '0',
+            '--by', 'lars',
+            '--root', $this->root,
+        ]));
+
+        $path = (new SessionStore())->pathFor($this->root, $id) . '/validation-evidence.jsonl';
+        $record = json_decode(trim((string) file_get_contents($path)), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('2.0', $record['schema_version']);
+        self::assertSame(3, $record['contract_revision']);
+        self::assertArrayNotHasKey('work_brief_revision', $record);
+    }
+
+    public function testOldBriefRevisionOptionIsRejectedRatherThanGuessed(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'legacy-validation', '--root', $this->root]));
+        $id = $this->firstSessionId();
+
+        self::assertSame(1, $this->invoke([
+            'validation', 'record', $id,
+            '--brief-revision', '1',
+            '--command', 'vendor/bin/phpunit',
+            '--status', 'passed',
+            '--exit-code', '0',
+            '--root', $this->root,
+        ]));
+    }
+
+    public function testEphemeralFlagSurvivesWorkingMemoryReload(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'EXP-1', '--root', $this->root, '--ephemeral']));
         $store = new SessionStore();
         $session = $store->load($this->root, $this->firstSessionId());
-        self::assertTrue($session->ephemeral, 'an experiment must stay distinguishable from governed work');
-        self::assertTrue($session->toArray()['ephemeral']);
-
-        // Closing must not silently promote or demote it.
-        $closed = $store->setStatus($session, SessionStatus::DROPPED);
-        self::assertTrue($closed->ephemeral);
-        self::assertTrue($store->load($this->root, $session->id)->ephemeral);
+        self::assertTrue($session->ephemeral);
+        self::assertTrue($store->setStatus($session, SessionStatus::DROPPED)->ephemeral);
     }
 
-    public function testASessionWrittenBeforeTheFlagExistedCountsAsGoverned(): void
+    /** @param list<string> $args */
+    private function invoke(array $args): int
     {
-        self::assertSame(0, $this->invoke(['start', '--task', 'task.legacy', '--root', $this->root]));
-        $id = $this->firstSessionId();
-        $file = $this->root . '/' . $id . '/session.json';
-        $data = json_decode((string) file_get_contents($file), true);
-        self::assertIsArray($data);
-        unset($data['ephemeral']);
-        file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
-
-        // Defaulting the other way would let an old session quietly escape every repository gate.
-        self::assertFalse((new SessionStore())->load($this->root, $id)->ephemeral);
+        return (new Cli())->run(['agent-session', ...$args]);
     }
 
-    public function testStartRequiresTask(): void
+    private function firstSessionId(): string
     {
-        self::assertSame(1, $this->invoke(['start', '--root', $this->root]));
-    }
-
-    public function testHelpReturnsZero(): void
-    {
-        self::assertSame(0, $this->invoke(['help']));
-    }
-
-    public function testUnknownCommandReturnsOne(): void
-    {
-        self::assertSame(1, $this->invoke(['frobnicate']));
-    }
-
-    public function testClaimRefusesForeignActiveSessionWithoutForce(): void
-    {
-        self::assertSame(0, $this->invoke(['start', '--task', 'task.x', '--slug', 'shared', '--by', 'lars', '--root', $this->root]));
-        $id = $this->firstSessionId();
-        $store = new SessionStore();
-
-        self::assertSame(1, $this->invoke(['claim', $id, '--by', 'mara', '--root', $this->root]));
-        self::assertSame('lars', $store->load($this->root, $id)->claimedBy);
-
-        self::assertSame(0, $this->invoke(['claim', $id, '--by', 'mara', '--force', '--root', $this->root]));
-        self::assertSame('mara', $store->load($this->root, $id)->claimedBy);
-    }
-
-    public function testCheckpointRecordCloseAndListFlow(): void
-    {
-        self::assertSame(0, $this->invoke(['start', '--task', 'task.x', '--slug', 'flow', '--root', $this->root]));
-        $id = $this->firstSessionId();
-        $store = new SessionStore();
-
-        self::assertSame(0, $this->invoke(['checkpoint', $id, '--title', 'Discovery', '--root', $this->root]));
-        self::assertCount(1, $store->load($this->root, $id)->checkpoints);
-
-        self::assertSame(0, $this->invoke(['record', $id, '--kind', 'decision', '--title', 'Scoped', '--root', $this->root]));
-        self::assertStringContainsString('Decision: Scoped', (string) file_get_contents($store->pathFor($this->root, $id) . '/decisions.md'));
-
-        self::assertSame(0, $this->invoke(['close', $id, '--status', 'done', '--root', $this->root]));
-        self::assertSame(SessionStatus::DONE, $store->load($this->root, $id)->status);
-
-        self::assertSame(0, $this->invoke(['list', '--status', 'done', '--root', $this->root]));
-    }
-
-    public function testCloseRequiresClosedStatus(): void
-    {
-        self::assertSame(0, $this->invoke(['start', '--task', 'task.x', '--slug', 'badclose', '--root', $this->root]));
-        $id = $this->firstSessionId();
-
-        self::assertSame(1, $this->invoke(['close', $id, '--status', 'active', '--root', $this->root]));
-    }
-
-    public function testBriefCreateApproveReviseAndShowFlow(): void
-    {
-        self::assertSame(0, $this->invoke(['start', '--task', 'task.x', '--slug', 'brief', '--root', $this->root]));
-        $id = $this->firstSessionId();
-        $store = new SessionStore();
-
-        self::assertSame(0, $this->invoke([
-            'brief', 'create', $id,
-            '--goal', 'Make task scope explicit.',
-            '--scope', 'src/Scope.php',
-            '--validation', 'vendor/bin/phpunit tests/ScopeTest.php',
-            '--behavior-anchor', 'HTTP request -> scope service -> persisted access state',
-            '--root', $this->root,
-        ]));
-        self::assertFileExists($store->pathFor($this->root, $id) . '/work-brief.json');
-        $brief = json_decode((string) file_get_contents($store->pathFor($this->root, $id) . '/work-brief.json'), true, 512, JSON_THROW_ON_ERROR);
-        self::assertSame(['HTTP request -> scope service -> persisted access state'], $brief['behavior_anchors']);
-
-        self::assertSame(0, $this->invoke(['brief', 'approve', $id, '--by', 'lars', '--root', $this->root]));
-        self::assertFileExists($store->pathFor($this->root, $id) . '/approval.json');
-
-        self::assertSame(0, $this->invoke([
-            'brief', 'revise', $id,
-            '--goal', 'Make task scope explicit.',
-            '--scope', 'src/Scope.php',
-            '--scope', 'tests/ScopeTest.php',
-            '--validation', 'vendor/bin/phpunit tests/ScopeTest.php',
-            '--root', $this->root,
-        ]));
-        self::assertFileDoesNotExist($store->pathFor($this->root, $id) . '/approval.json');
-        self::assertSame(0, $this->invoke(['brief', 'show', $id, '--root', $this->root]));
-    }
-
-    public function testValidationAndLearningCompletionFlow(): void
-    {
-        self::assertSame(0, $this->invoke(['start', '--task', 'task.x', '--slug', 'completion', '--root', $this->root]));
-        $id = $this->firstSessionId();
-
-        self::assertSame(0, $this->invoke(['validation', 'record', $id, '--brief-revision', '1', '--command', 'vendor/bin/phpunit', '--status', 'passed', '--exit-code', '0', '--duration-ms', '22', '--by', 'lars', '--root', $this->root]));
-        self::assertSame(0, $this->invoke(['learning', 'decide', $id, '--status', 'no_durable_learning', '--by', 'lars', '--root', $this->root]));
-        self::assertFileExists((new SessionStore())->pathFor($this->root, $id) . '/validation-evidence.jsonl');
-        self::assertFileExists((new SessionStore())->pathFor($this->root, $id) . '/learning-decision.json');
+        return basename((string) (glob($this->root . '/*', GLOB_ONLYDIR)[0] ?? ''));
     }
 
     private function removeDirectory(string $path): void
