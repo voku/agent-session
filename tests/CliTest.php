@@ -107,6 +107,19 @@ final class CliTest extends TestCase
         self::assertTrue($store->setStatus($session, SessionStatus::DROPPED)->ephemeral);
     }
 
+    public function testPruneRejectsUnknownOptionsAndStatusesInsteadOfChangingScope(): void
+    {
+        self::assertSame(1, $this->invoke([
+            'prune', '--root', $this->root, '--totally-bogus-option', 'xyz', '--dry-run',
+        ]));
+        self::assertSame(1, $this->invoke([
+            'prune', '--root', $this->root, '--status', 'activ', '--dry-run',
+        ]));
+        self::assertSame(1, $this->invoke([
+            'prune', '--root', $this->root, '--status', 'done,activ', '--dry-run',
+        ]));
+    }
+
     /** @param list<string> $args */
     private function invoke(array $args): int
     {
