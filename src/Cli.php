@@ -255,10 +255,14 @@ final class Cli
     private function pruneCommand(array $tokens): int
     {
         $parsed = $this->parseOptions($tokens);
+        $this->assertOnlyOptions($parsed['options'], ['root', 'keep-days', 'status', 'dry-run']);
         $root = $this->resolveRoot($parsed['options']);
         $keepDays = (int) ($this->stringOption($parsed['options'], 'keep-days') ?? '30');
         $dryRun = $this->hasFlag($parsed['options'], 'dry-run');
-        $statuses = $this->parseStatuses($this->stringOption($parsed['options'], 'status') ?? 'done,dropped');
+        $statusValue = $this->stringOption($parsed['options'], 'status');
+        $statuses = $statusValue === null
+            ? [SessionStatus::DONE, SessionStatus::DROPPED]
+            : $this->parseStatuses($statusValue);
 
         $removed = $this->store->prune($root, $keepDays, $statuses, $dryRun);
         $verb = $dryRun ? 'Would prune' : 'Pruned';
@@ -276,12 +280,13 @@ final class Cli
         $statuses = [];
         foreach (explode(',', $value) as $part) {
             $status = SessionStatus::tryFromString($part);
-            if ($status !== null) {
-                $statuses[] = $status;
+            if ($status === null) {
+                throw new \InvalidArgumentException('Unknown prune status: ' . $part);
             }
+            $statuses[] = $status;
         }
 
-        return $statuses === [] ? [SessionStatus::DONE, SessionStatus::DROPPED] : $statuses;
+        return $statuses;
     }
 
     private function helpCommand(): int
@@ -371,6 +376,19 @@ final class Cli
         }
 
         return ['options' => $options, 'arguments' => $arguments];
+    }
+
+    /**
+     * @param array<string, list<string>> $options
+     * @param list<string> $allowed
+     */
+    private function assertOnlyOptions(array $options, array $allowed): void
+    {
+        foreach (array_keys($options) as $name) {
+            if (!in_array($name, $allowed, true)) {
+                throw new \InvalidArgumentException('Unknown option: --' . $name);
+            }
+        }
     }
 
     /** @param array<string, list<string>> $options */
