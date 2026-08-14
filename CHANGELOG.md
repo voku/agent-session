@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+- The README reflects the 0.5 ownership boundary and current CLI: Session owns
+  pruneable working memory and Contract-revisioned validation observations, not
+  the removed work-brief, approval, or Learning commands and files.
+
 ## 0.5.0 - 2026-08-12
 
 Session becomes what its name claims: disposable working memory for one governed
