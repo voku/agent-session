@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pruneable working memory and Contract-revisioned validation observations, not
   the removed work-brief, approval, or Learning commands and files.
 
+## 0.6.0 - 2026-08-15
+
+### Changed
+
+- **Breaking:** validation evidence may carry the deterministic implementation
+  snapshot observed by the validation command. Governed consumers can now
+  reject a PASS recorded for an earlier implementation state even when the
+  Contract revision and command are unchanged.
+- `validation record` accepts `--implementation-snapshot sha256:<digest>` and
+  persists that opaque identity without trying to compute repository state in
+  `agent-session` itself.
+
 ## 0.5.0 - 2026-08-12
 
 Session becomes what its name claims: disposable working memory for one governed
@@ -113,7 +125,7 @@ would reintroduce exactly the ambiguity this release removes.
 ### Added
 
 - Work briefs may carry optional, repeatable behavior anchors (via
-  `--behavior-anchor` on `brief create`/`brief revise`). Anchors preserve the
+  `--behavior-anchor` on `brief create`/`revise`). Anchors preserve the
   concrete behavior that must remain true while agents plan, implement, and
   review a change. Briefs without anchors remain fully compatible.
 
