@@ -22,6 +22,7 @@ final class ValidationEvidenceStore
         ?int $durationMs = null,
         ?string $recordedBy = null,
         ?string $note = null,
+        ?string $implementationSnapshot = null,
     ): ValidationEvidence {
         $command = trim($command);
         if ($contractRevision < 1) {
@@ -37,6 +38,7 @@ final class ValidationEvidenceStore
         if ($durationMs !== null && $durationMs < 0) {
             throw new RuntimeException('--duration-ms must be non-negative.');
         }
+        $implementationSnapshot = $this->snapshot($implementationSnapshot);
 
         $evidence = new ValidationEvidence(
             $session->taskId,
@@ -48,6 +50,7 @@ final class ValidationEvidenceStore
             $this->nullable($recordedBy),
             $this->nullable($note),
             (new DateTimeImmutable('now'))->format(DateTimeInterface::ATOM),
+            $implementationSnapshot,
         );
         $encoded = json_encode($evidence->toArray(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         if (file_put_contents($this->path($session), $encoded . "\n", FILE_APPEND) === false) {
@@ -62,6 +65,9 @@ final class ValidationEvidenceStore
             $evidence->exitCode,
             $evidence->executedAt,
         );
+        if ($evidence->implementationSnapshot !== null) {
+            $line .= '- Implementation snapshot: ' . $evidence->implementationSnapshot . "\n";
+        }
         if ($evidence->durationMs !== null) {
             $line .= '- Duration: ' . $evidence->durationMs . "ms\n";
         }
@@ -121,6 +127,7 @@ final class ValidationEvidenceStore
                 $this->nullableValue($data['recorded_by'] ?? null),
                 $this->nullableValue($data['note'] ?? null),
                 $data['executed_at'],
+                $this->snapshotValue($data['implementation_snapshot'] ?? null),
             );
         }
 
@@ -149,5 +156,27 @@ final class ValidationEvidenceStore
     private function nullableValue(mixed $value): ?string
     {
         return is_string($value) && trim($value) !== '' ? trim($value) : null;
+    }
+
+    private function snapshot(?string $value): ?string
+    {
+        $value = $this->nullable($value);
+        if ($value !== null && preg_match('/^sha256:[a-f0-9]{64}$/', $value) !== 1) {
+            throw new RuntimeException('implementation_snapshot must be a sha256:<64 lowercase hex> digest.');
+        }
+
+        return $value;
+    }
+
+    private function snapshotValue(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        if (!is_string($value)) {
+            throw new RuntimeException('Invalid validation evidence implementation_snapshot.');
+        }
+
+        return $this->snapshot($value);
     }
 }
