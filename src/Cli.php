@@ -214,7 +214,7 @@ final class Cli
     {
         $action = array_shift($tokens) ?? 'help';
         if (in_array($action, ['help', '--help', '-h'], true)) {
-            fwrite(STDOUT, "Usage: agent-session validation record <id> --contract-revision N --command COMMAND --status passed|failed --exit-code N [--duration-ms N] [--by ACTOR] [--note TEXT]\n");
+            fwrite(STDOUT, "Usage: agent-session validation record <id> --contract-revision N --command COMMAND --status passed|failed --exit-code N [--duration-ms N] [--by ACTOR] [--note TEXT] [--implementation-snapshot sha256:DIGEST]\n");
 
             return 0;
         }
@@ -240,6 +240,7 @@ final class Cli
             $durationMs,
             $this->stringOption($parsed['options'], 'by'),
             $this->stringOption($parsed['options'], 'note'),
+            $this->stringOption($parsed['options'], 'implementation-snapshot'),
         );
         fwrite(STDOUT, sprintf(
             "Recorded %s validation evidence for Contract revision %d on session '%s'.\n",

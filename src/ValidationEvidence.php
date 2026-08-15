@@ -16,6 +16,7 @@ final readonly class ValidationEvidence
         public ?string $recordedBy,
         public ?string $note,
         public string $executedAt,
+        public ?string $implementationSnapshot = null,
     ) {
     }
 
@@ -26,6 +27,7 @@ final readonly class ValidationEvidence
             'schema_version' => '2.0',
             'task_id' => $this->taskId,
             'contract_revision' => $this->contractRevision,
+            'implementation_snapshot' => $this->implementationSnapshot,
             'command' => $this->command,
             'status' => $this->status->value,
             'exit_code' => $this->exitCode,
