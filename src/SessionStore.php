@@ -38,33 +38,47 @@ final class SessionStore
             throw new RuntimeException('A session requires a non-empty --task id.');
         }
 
-        $id = $this->generateId($root, $taskId, $slug);
-        $path = $this->pathFor($root, $id);
-        $this->makeDirectory($path . '/checkpoints');
-
-        foreach ($this->scaffold->files($taskId) as $relativePath => $contents) {
-            $this->makeDirectory(dirname($path . '/' . $relativePath));
-            $this->writeFile($path . '/' . $relativePath, $contents);
-        }
-
-        $now = $this->now();
-        $session = new Session(
-            $id,
+        return $this->createAtId(
+            $root,
+            $this->generateId($root, $taskId, $slug),
             $taskId,
-            SessionStatus::ACTIVE,
-            $by !== null && trim($by) !== '' ? trim($by) : null,
-            $by !== null && trim($by) !== '' ? $now : null,
-            $baseCommit !== null && trim($baseCommit) !== '' ? trim($baseCommit) : null,
-            $now,
-            $now,
-            [],
-            $path,
+            $by,
+            $baseCommit,
             $ephemeral,
         );
+    }
 
-        $this->writeMetadata($session);
+    /**
+     * Recreate pruneable working memory at an identity that is already owned by
+     * durable caller state, for example a governed Run.
+     *
+     * This deliberately does not derive or replace the id. Callers must supply
+     * an exact path-safe Session id and the target must no longer exist.
+     */
+    public function rehydrate(
+        string $root,
+        string $id,
+        string $taskId,
+        ?string $by = null,
+        ?string $baseCommit = null,
+        bool $ephemeral = false,
+    ): Session {
+        $taskId = trim($taskId);
+        if ($taskId === '') {
+            throw new RuntimeException('A session requires a non-empty --task id.');
+        }
 
-        return $session;
+        $id = trim($id);
+        if ($id === '' || preg_match('/^[a-z0-9][a-z0-9._-]*$/', $id) !== 1) {
+            throw new RuntimeException('A rehydrated session requires a path-safe exact id.');
+        }
+
+        $path = $this->pathFor($root, $id);
+        if (file_exists($path) || is_link($path)) {
+            throw new RuntimeException(sprintf('Cannot rehydrate existing Session: %s', $id));
+        }
+
+        return $this->createAtId($root, $id, $taskId, $by, $baseCommit, $ephemeral);
     }
 
     public function exists(string $root, string $id): bool
@@ -250,6 +264,42 @@ final class SessionStore
     public function pathFor(string $root, string $id): string
     {
         return rtrim($root, '/') . '/' . $id;
+    }
+
+    private function createAtId(
+        string $root,
+        string $id,
+        string $taskId,
+        ?string $by,
+        ?string $baseCommit,
+        bool $ephemeral,
+    ): Session {
+        $path = $this->pathFor($root, $id);
+        $this->makeDirectory($path . '/checkpoints');
+
+        foreach ($this->scaffold->files($taskId) as $relativePath => $contents) {
+            $this->makeDirectory(dirname($path . '/' . $relativePath));
+            $this->writeFile($path . '/' . $relativePath, $contents);
+        }
+
+        $now = $this->now();
+        $session = new Session(
+            $id,
+            $taskId,
+            SessionStatus::ACTIVE,
+            $by !== null && trim($by) !== '' ? trim($by) : null,
+            $by !== null && trim($by) !== '' ? $now : null,
+            $baseCommit !== null && trim($baseCommit) !== '' ? trim($baseCommit) : null,
+            $now,
+            $now,
+            [],
+            $path,
+            $ephemeral,
+        );
+
+        $this->writeMetadata($session);
+
+        return $session;
     }
 
     private function generateId(string $root, string $taskId, ?string $slug): string
