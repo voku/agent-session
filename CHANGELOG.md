@@ -7,12 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.6.1 - 2026-08-17
+
 ### Fixed
 
 - `SessionStore::rehydrate()` can recreate pruneable working memory at an exact,
   already-authoritative Session ID after pruning or a clean checkout. It rejects
   unsafe IDs and existing paths instead of deriving a new date-based identity or
   overwriting surviving Session state.
+- `dev-main` again matches the current 0.6 release line instead of advertising
+  the stale `0.5.x-dev` alias.
 - The README reflects the 0.5 ownership boundary and current CLI: Session owns
   pruneable working memory and Contract-revisioned validation observations, not
   the removed work-brief, approval, or Learning commands and files.
