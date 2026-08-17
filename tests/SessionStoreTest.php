@@ -40,6 +40,41 @@ final class SessionStoreTest extends TestCase
         self::assertStringContainsString('task.002.remove-session-access', (string) file_get_contents($session->path . '/plan.md'));
     }
 
+    public function testRehydrateScaffoldsExactHistoricalIdentity(): void
+    {
+        $store = new SessionStore();
+        $id = '2001-02-03-task-x-r1-deadbeef';
+
+        $session = $store->rehydrate($this->root, $id, 'task.x', 'lars', 'abc123');
+
+        self::assertSame($id, $session->id);
+        self::assertSame($this->root . '/' . $id, $session->path);
+        self::assertSame(SessionStatus::ACTIVE, $session->status);
+        self::assertSame('task.x', $session->taskId);
+        self::assertSame('lars', $session->claimedBy);
+        self::assertSame('abc123', $session->baseCommit);
+        self::assertSame($id, $store->load($this->root, $id)->id);
+        self::assertFileExists($session->path . '/plan.md');
+        self::assertStringContainsString('task.x', (string) file_get_contents($session->path . '/plan.md'));
+    }
+
+    public function testRehydrateRejectsUnsafeIdentity(): void
+    {
+        $store = new SessionStore();
+
+        $this->expectExceptionMessage('path-safe exact id');
+        $store->rehydrate($this->root, '../outside', 'task.x');
+    }
+
+    public function testRehydrateRefusesToOverwriteExistingSession(): void
+    {
+        $store = new SessionStore();
+        $session = $store->create($this->root, 'task.x', 'known-session');
+
+        $this->expectExceptionMessage('Cannot rehydrate existing Session');
+        $store->rehydrate($this->root, $session->id, 'task.x');
+    }
+
     public function testLoadRoundTrip(): void
     {
         $store = new SessionStore();
