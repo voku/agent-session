@@ -69,7 +69,7 @@ final class SessionStore
         }
 
         $id = trim($id);
-        if ($id === '' || preg_match('/^[a-z0-9][a-z0-9._-]*$/', $id) !== 1) {
+        if (!$this->isSafeId($id)) {
             throw new RuntimeException('A rehydrated session requires a path-safe exact id.');
         }
 
@@ -83,14 +83,16 @@ final class SessionStore
 
     public function exists(string $root, string $id): bool
     {
-        return is_file($this->pathFor($root, $id) . '/' . self::METADATA_FILE);
+        $path = $this->pathFor($root, $id);
+
+        return !is_link($path) && is_file($path . '/' . self::METADATA_FILE);
     }
 
     public function load(string $root, string $id): Session
     {
         $path = $this->pathFor($root, $id);
         $metadataPath = $path . '/' . self::METADATA_FILE;
-        if (!is_file($metadataPath)) {
+        if (is_link($path) || !is_file($metadataPath)) {
             throw new RuntimeException(sprintf('Session not found: %s', $id));
         }
 
@@ -124,7 +126,11 @@ final class SessionStore
 
         $sessions = [];
         foreach (scandir($root) ?: [] as $entry) {
-            if ($entry === '.' || $entry === '..') {
+            if ($entry === '.' || $entry === '..' || !$this->isSafeId($entry)) {
+                continue;
+            }
+            $path = rtrim($root, '/') . '/' . $entry;
+            if (is_link($path)) {
                 continue;
             }
             if ($this->exists($root, $entry)) {
@@ -263,6 +269,8 @@ final class SessionStore
 
     public function pathFor(string $root, string $id): string
     {
+        $this->assertSafeId($id);
+
         return rtrim($root, '/') . '/' . $id;
     }
 
@@ -322,6 +330,18 @@ final class SessionStore
         $value = trim($value, '-');
 
         return $value === '' ? 'session' : $value;
+    }
+
+    private function assertSafeId(string $id): void
+    {
+        if (!$this->isSafeId($id)) {
+            throw new RuntimeException('A session requires a path-safe id.');
+        }
+    }
+
+    private function isSafeId(string $id): bool
+    {
+        return $id !== '' && preg_match('/^[a-z0-9][a-z0-9._-]*$/', $id) === 1;
     }
 
     private function writeMetadata(Session $session): void
@@ -451,6 +471,9 @@ final class SessionStore
 
     private function removeDirectory(string $path): void
     {
+        if (is_link($path)) {
+            throw new RuntimeException(sprintf('Refusing to remove symlinked session directory: %s', $path));
+        }
         if (!is_dir($path)) {
             return;
         }
@@ -460,13 +483,22 @@ final class SessionStore
                 continue;
             }
             $full = $path . '/' . $entry;
+            if (is_link($full)) {
+                if (!unlink($full)) {
+                    throw new RuntimeException(sprintf('Failed to remove symlink: %s', $full));
+                }
+
+                continue;
+            }
             if (is_dir($full)) {
                 $this->removeDirectory($full);
-            } else {
-                unlink($full);
+            } elseif (!unlink($full)) {
+                throw new RuntimeException(sprintf('Failed to remove file: %s', $full));
             }
         }
 
-        rmdir($path);
+        if (!rmdir($path)) {
+            throw new RuntimeException(sprintf('Failed to remove directory: %s', $path));
+        }
     }
 }
