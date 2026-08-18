@@ -120,7 +120,6 @@ final class CliTest extends TestCase
         ]));
     }
 
-    /** @param list<string> $args */
     public function testCloseRecordsTheReasonWorkingMemoryWasRetired(): void
     {
         self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'retired', '--root', $this->root]));
@@ -233,6 +232,7 @@ final class CliTest extends TestCase
         ob_end_clean();
     }
 
+    /** @param list<string> $args */
     private function invoke(array $args): int
     {
         return (new Cli())->run(['agent-session', ...$args]);
