@@ -12,11 +12,7 @@ use voku\AgentSession\SessionStore;
 
 /**
  * A task has at most one open working-memory Session, and a Session that stops
- * being open records why.
- *
- * Both rules were previously re-derived by every governed owner that touched
- * Session state, which is how the same invariant ended up with several
- * different failure behaviours for one storage layout.
+ * being open records why while that pruneable working memory still exists.
  */
 final class TaskSessionOwnershipTest extends TestCase
 {
@@ -44,19 +40,44 @@ final class TaskSessionOwnershipTest extends TestCase
         self::assertSame($open->id, $store->activeForTask($this->root, 'TASK-A')?->id);
         self::assertSame($other->id, $store->activeForTask($this->root, 'TASK-B')?->id);
         self::assertNull($store->activeForTask($this->root, 'TASK-C'));
-
         self::assertCount(2, $store->allForTask($this->root, 'TASK-A'));
         self::assertCount(1, $store->openForTask($this->root, 'TASK-A'));
     }
 
-    public function testActiveForTaskReportsEveryOpenSessionWhenTheInvariantIsBroken(): void
+    public function testCreateRejectsASecondOpenSessionForTheSameTask(): void
     {
         $store = new SessionStore();
         $first = $store->create($this->root, 'TASK-A', 'first');
-        $second = $store->create($this->root, 'TASK-A', 'second');
 
-        // A blocked Session is still open working memory: it is waiting, not finished.
-        $store->setStatus($second, SessionStatus::BLOCKED);
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('already has open Session ' . $first->id);
+
+        $store->create($this->root, 'TASK-A', 'second');
+    }
+
+    public function testRehydrateRejectsParallelOpenWorkingMemoryForTheSameTask(): void
+    {
+        $store = new SessionStore();
+        $first = $store->create($this->root, 'TASK-A', 'first');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('already has open Session ' . $first->id);
+
+        $store->rehydrate($this->root, 'historical-task-a', 'TASK-A');
+    }
+
+    public function testActiveForTaskReportsEveryOpenSessionWhenLegacyStateIsBroken(): void
+    {
+        $store = new SessionStore();
+        $first = $store->create($this->root, 'TASK-A', 'first');
+        $second = $store->create($this->root, 'TASK-B', 'second');
+        $second = $store->setStatus($second, SessionStatus::BLOCKED);
+
+        $metadataPath = $second->path . '/session.json';
+        $metadata = json_decode((string) file_get_contents($metadataPath), true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($metadata);
+        $metadata['task_id'] = 'TASK-A';
+        file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
         try {
             $store->activeForTask($this->root, 'TASK-A');
@@ -66,7 +87,6 @@ final class TaskSessionOwnershipTest extends TestCase
             self::assertSame([$first->id, $second->id], $exception->sessionIds);
         }
 
-        // A reporting caller must still be able to render the broken state.
         self::assertCount(2, $store->openForTask($this->root, 'TASK-A'));
     }
 
@@ -148,7 +168,7 @@ final class TaskSessionOwnershipTest extends TestCase
         $store->close($session, SessionStatus::BLOCKED);
     }
 
-    public function testCheckpointsDoNotDropClosureProvenance(): void
+    public function testCheckpointsDoNotDropClosureProvenanceWhileSessionStillExists(): void
     {
         $store = new SessionStore();
         $session = $store->create($this->root, 'TASK-A');
