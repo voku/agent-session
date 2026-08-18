@@ -121,6 +121,44 @@ final class CliTest extends TestCase
     }
 
     /** @param list<string> $args */
+    public function testCloseRecordsTheReasonWorkingMemoryWasRetired(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'retired', '--root', $this->root]));
+        $id = $this->firstSessionId();
+
+        self::assertSame(0, $this->invoke([
+            'close', $id,
+            '--status', 'dropped',
+            '--reason', 'superseded by approved Contract revision 2',
+            '--root', $this->root,
+        ]));
+
+        $session = (new SessionStore())->load($this->root, $id);
+        self::assertSame(SessionStatus::DROPPED, $session->status);
+        self::assertSame('superseded by approved Contract revision 2', $session->closedReason);
+    }
+
+    public function testCloseRefusesToReopenOrRelabelARetiredSession(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'terminal', '--root', $this->root]));
+        $id = $this->firstSessionId();
+
+        self::assertSame(0, $this->invoke(['close', $id, '--status', 'done', '--root', $this->root]));
+        self::assertSame(1, $this->invoke(['close', $id, '--status', 'dropped', '--root', $this->root]));
+
+        self::assertSame(SessionStatus::DONE, (new SessionStore())->load($this->root, $id)->status);
+    }
+
+    public function testListCanBeScopedToOneTask(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'one', '--root', $this->root]));
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-2', '--slug', 'two', '--root', $this->root]));
+
+        self::assertSame(0, $this->invoke(['list', '--task', 'TASK-2', '--root', $this->root]));
+        self::assertCount(1, (new SessionStore())->allForTask($this->root, 'TASK-2'));
+        self::assertCount(1, (new SessionStore())->allForTask($this->root, 'TASK-1'));
+    }
+
     private function invoke(array $args): int
     {
         return (new Cli())->run(['agent-session', ...$args]);

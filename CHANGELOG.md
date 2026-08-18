@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- `SessionStore::activeForTask()`, `openForTask()` and `allForTask()` own the
+  "one open Session per task" invariant. Every governed owner previously
+  re-derived it from `all()`, which is how one storage rule ended up with
+  several different failure behaviours: some callers threw, one silently
+  returned nothing, and one reported a count.
+- `Session::$closedAt` / `$closedReason` and `SessionStore::close()` record
+  *why* working memory stopped being open. `dropped` is written both by a human
+  abandoning a task and by a governed owner whose newer approved Contract
+  revision superseded the Run a Session served; those are different facts, and
+  an unexplained `dropped` is the one thing nobody can reconstruct after the
+  Session is pruned.
+- `agent-session close <id> --reason TEXT` and `agent-session list --task ID`.
+
+### Changed
+
+- A closed Session is terminal. `SessionStore::setStatus()` refuses to reopen it
+  or relabel it as the other closed status, and repeating the identical close is
+  idempotent. `create()` allocates fresh working memory and `rehydrate()`
+  restores caller-authorized historical identity; silently reviving a finished
+  Session would make a governed Run look live again without any owner deciding
+  that it is.
+- `session.json` is schema `1.1`. The added fields are optional and `1.0`
+  metadata still loads unchanged.
+
 ## 0.6.1 - 2026-08-17
 
 ### Fixed

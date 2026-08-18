@@ -62,7 +62,9 @@ agent-session record 2026-06-07-remove-session-access --kind decision   --title 
 agent-session record 2026-06-07-remove-session-access --kind assumption --title "Missing-context behaviour" --body "..."
 agent-session validation record 2026-06-07-remove-session-access --contract-revision 1 --command "vendor/bin/phpunit tests/SessionAccessTest.php" --status passed --exit-code 0 --duration-ms 1840 --by lars
 agent-session close 2026-06-07-remove-session-access --status done
+agent-session close 2026-06-07-remove-session-access --status dropped --reason "superseded by approved Contract revision 2"
 agent-session list --status active
+agent-session list --task task.002.remove-session-access
 agent-session show  2026-06-07-remove-session-access
 
 # retention: working memory must be able to disappear
@@ -112,6 +114,47 @@ $session = (new SessionStore())->rehydrate(
     $baseCommit,
 );
 ```
+
+### One open Session per task
+
+A task has at most one open working-memory Session. That rule belongs to this
+package, so hosts select instead of re-deriving it:
+
+```php
+<?php
+
+use voku\AgentSession\AmbiguousActiveSession;
+use voku\AgentSession\SessionStore;
+
+$sessions = new SessionStore();
+
+$open = $sessions->openForTask($sessionsRoot, $taskId);   // report the real state
+$active = $sessions->activeForTask($sessionsRoot, $taskId); // pick exactly one, or null
+```
+
+`activeForTask()` throws `AmbiguousActiveSession` — carrying the task id and the
+offending Session ids — when more than one Session is open. A host that only
+renders state uses `openForTask()` and counts, because "two are open" is
+something a human has to resolve, not something the store may pick a winner for.
+
+### Retiring working memory
+
+A Session that stops being open records **why**:
+
+```php
+$sessions->close($session, SessionStatus::DROPPED, 'superseded by approved Contract revision 2');
+```
+
+`dropped` is written both by a human abandoning a task and by a governed owner
+whose newer approved Contract revision superseded the Run that Session served.
+Those are different facts. Recording the reason keeps a Session explainable
+after it is pruned, when only durable state remains.
+
+A closed Session is terminal: it cannot be reopened or relabelled as the other
+closed status, and repeating the identical close is a no-op. Use `create()` for
+fresh working memory and `rehydrate()` for caller-authorized historical
+identity — reviving a finished Session would make a governed Run look live again
+without any owner having decided that it is.
 
 Use `create()` when a genuinely new Session is required. Use `rehydrate()` only
 when a durable owner already supplies the exact Session id to restore after

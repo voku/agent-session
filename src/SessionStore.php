@@ -110,6 +110,8 @@ final class SessionStore
             $this->checkpointsField($data),
             $path,
             ($data['ephemeral'] ?? false) === true,
+            $this->nullableStringField($data, 'closed_at'),
+            $this->nullableStringField($data, 'closed_reason'),
         );
     }
 
@@ -137,6 +139,63 @@ final class SessionStore
         return $sessions;
     }
 
+    /**
+     * Every Session that served one task, oldest id first.
+     *
+     * @return list<Session>
+     */
+    public function allForTask(string $root, string $taskId): array
+    {
+        $taskId = trim($taskId);
+        if ($taskId === '') {
+            throw new RuntimeException('Selecting Sessions requires a non-empty task id.');
+        }
+
+        return array_values(array_filter(
+            $this->all($root),
+            static fn (Session $session): bool => $session->taskId === $taskId,
+        ));
+    }
+
+    /**
+     * The Sessions for one task that are still open working memory.
+     *
+     * Returned as a list rather than a single Session on purpose: a reporting
+     * caller has to be able to say "two are open" instead of failing, which is
+     * the only honest thing to render for a state a human still has to resolve.
+     *
+     * @return list<Session>
+     */
+    public function openForTask(string $root, string $taskId): array
+    {
+        return array_values(array_filter(
+            $this->allForTask($root, $taskId),
+            static fn (Session $session): bool => !$session->status->isClosed(),
+        ));
+    }
+
+    /**
+     * The single open Session for one task, or null when none is open.
+     *
+     * A task has at most one open working-memory Session. Owners resume that
+     * Session instead of allocating a parallel one, so more than one open
+     * Session is a state to report, not a set to pick from.
+     *
+     * @throws AmbiguousActiveSession when more than one Session is open
+     */
+    public function activeForTask(string $root, string $taskId): ?Session
+    {
+        $open = $this->openForTask($root, $taskId);
+        if (count($open) > 1) {
+            throw new AmbiguousActiveSession(
+                trim($taskId),
+                array_map(static fn (Session $session): string => $session->id, $open),
+            );
+        }
+
+        return $open[0] ?? null;
+    }
+
     public function claim(Session $session, ?string $by, ?string $baseCommit): Session
     {
         $updated = new Session(
@@ -151,14 +210,50 @@ final class SessionStore
             $session->checkpoints,
             $session->path,
             $session->ephemeral,
+            $session->closedAt,
+            $session->closedReason,
         );
         $this->writeMetadata($updated);
 
         return $updated;
     }
 
-    public function setStatus(Session $session, SessionStatus $status): Session
+    /**
+     * Move a Session to another lifecycle status.
+     *
+     * A closed Session is terminal. `create()` allocates fresh working memory
+     * and `rehydrate()` restores a caller-authorized historical identity, so
+     * re-opening a finished Session would only make a governed Run look live
+     * again without any owner having decided that it is.
+     */
+    public function setStatus(Session $session, SessionStatus $status, ?string $reason = null): Session
     {
+        if ($session->status === $status) {
+            if ($reason === null || trim($reason) === '' || $session->closedReason === trim($reason)) {
+                return $session;
+            }
+
+            throw new RuntimeException(sprintf(
+                'Session %s is already %s; its recorded reason cannot be rewritten.',
+                $session->id,
+                $status->value,
+            ));
+        }
+
+        if ($session->status->isClosed()) {
+            throw new RuntimeException(sprintf(
+                'Session %s is closed as %s and cannot be moved to %s.',
+                $session->id,
+                $session->status->value,
+                $status->value,
+            ));
+        }
+
+        $reason = $reason === null || trim($reason) === '' ? null : trim($reason);
+        if ($reason !== null && !$status->isClosed()) {
+            throw new RuntimeException('A close reason only applies to a closed Session status.');
+        }
+
         $updated = new Session(
             $session->id,
             $session->taskId,
@@ -171,10 +266,32 @@ final class SessionStore
             $session->checkpoints,
             $session->path,
             $session->ephemeral,
+            $status->isClosed() ? $this->now() : null,
+            $status->isClosed() ? $reason : null,
         );
         $this->writeMetadata($updated);
 
         return $updated;
+    }
+
+    /**
+     * Retire working memory with the reason it was retired.
+     *
+     * `dropped` is written both by a human abandoning a task and by a governed
+     * owner whose newer approved revision superseded the Run this Session
+     * served. Those are different facts; recording which one happened keeps a
+     * pruned Session explainable from durable state alone.
+     */
+    public function close(Session $session, SessionStatus $status, ?string $reason = null): Session
+    {
+        if (!$status->isClosed()) {
+            throw new RuntimeException(sprintf(
+                'Closing a Session requires a closed status, got %s.',
+                $status->value,
+            ));
+        }
+
+        return $this->setStatus($session, $status, $reason);
     }
 
     public function addCheckpoint(Session $session, string $title, string $body): Session
@@ -209,6 +326,8 @@ final class SessionStore
             $checkpoints,
             $session->path,
             $session->ephemeral,
+            $session->closedAt,
+            $session->closedReason,
         );
         $this->writeMetadata($updated);
 
@@ -347,6 +466,8 @@ final class SessionStore
             $session->checkpoints,
             $session->path,
             $session->ephemeral,
+            $session->closedAt,
+            $session->closedReason,
         );
         $this->writeMetadata($updated);
     }

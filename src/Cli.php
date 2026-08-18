@@ -161,8 +161,13 @@ final class Cli
             throw new \InvalidArgumentException('close requires --status done or --status dropped.');
         }
 
-        $session = $this->store->setStatus($session, $status);
-        fwrite(STDOUT, sprintf("Closed session '%s' as %s.\n", $session->id, $session->status->value));
+        $session = $this->store->close($session, $status, $this->stringOption($parsed['options'], 'reason'));
+        fwrite(STDOUT, sprintf(
+            "Closed session '%s' as %s%s.\n",
+            $session->id,
+            $session->status->value,
+            $session->closedReason === null ? '' : ' (' . $session->closedReason . ')',
+        ));
 
         return 0;
     }
@@ -173,19 +178,23 @@ final class Cli
         $parsed = $this->parseOptions($tokens);
         $root = $this->resolveRoot($parsed['options']);
         $statusFilter = SessionStatus::tryFromString($this->stringOption($parsed['options'], 'status') ?? '');
+        $taskFilter = $this->stringOption($parsed['options'], 'task');
 
-        $sessions = $this->store->all($root);
+        $sessions = $taskFilter === null || trim($taskFilter) === ''
+            ? $this->store->all($root)
+            : $this->store->allForTask($root, $taskFilter);
         $shown = 0;
         foreach ($sessions as $session) {
             if ($statusFilter !== null && $session->status !== $statusFilter) {
                 continue;
             }
             fwrite(STDOUT, sprintf(
-                "%-40s %-8s task=%s claimed_by=%s\n",
+                "%-40s %-8s task=%s claimed_by=%s%s\n",
                 $session->id,
                 $session->status->value,
                 $session->taskId,
                 $session->claimedBy ?? '-',
+                $session->closedReason === null ? '' : ' reason=' . $session->closedReason,
             ));
             ++$shown;
         }
@@ -303,8 +312,8 @@ final class Cli
           claim       Claim a session.   <id> --by ACTOR [--base-commit SHA] [--force]
           checkpoint  Add a checkpoint.  <id> --title T [--body TEXT]
           record      Add a record.      <id> --kind decision|assumption --title T [--body TEXT]
-          close       Close a session.   <id> --status done|dropped
-          list        List sessions.     [--status STATUS]
+          close       Close a session.   <id> --status done|dropped [--reason TEXT]
+          list        List sessions.     [--status STATUS] [--task ID]
           show        Show metadata.     <id>
           validation  Record run-local validation observation. <record> <id> [options]
           prune       Retention cleanup. [--keep-days N] [--status done,dropped] [--dry-run]
