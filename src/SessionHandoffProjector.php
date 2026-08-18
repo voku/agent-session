@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace voku\AgentSession;
 
+use RuntimeException;
+
 /**
  * Projects a resumable handoff packet out of a Session's working memory.
  *
@@ -11,11 +13,26 @@ namespace voku\AgentSession;
  * `record()`'s entries, `addCheckpoint()`'s files - so the parsing is a read of
  * our own output rather than a guess about a free-form document. Anything the
  * agent wrote outside those shapes is left alone instead of being
- * misinterpreted, and a section still holding its scaffold placeholder is
+ * misinterpreted, and a section still holding its exact scaffold placeholder is
  * reported as empty rather than handed on as content.
  */
 final readonly class SessionHandoffProjector
 {
+    /** @var list<string> */
+    private const array SCAFFOLD_PLACEHOLDERS = [
+        '*What durable intent does this session serve? (mirror the task, do not redefine it)*',
+        '*none yet*',
+        '*the single next concrete step*',
+        '- *boundaries that must hold (scope, permissions, types, no unrelated migration)*',
+        '- *the observable conditions that prove completion*',
+        '*Record what you had to assume because the repository did not answer it.*',
+        '*Each assumption stays an assumption until validated.*',
+        '*Record observable decisions (context, decision, reason, validation).*',
+        '*Not a transcript of internal reasoning.*',
+        '*Commands run and their status. Pending checks are honest, not hidden.*',
+        '*Resumable state. Each checkpoint records completed / open / blocked / next action.*',
+    ];
+
     private ValidationEvidenceStore $validationEvidence;
 
     public function __construct(?ValidationEvidenceStore $validationEvidence = null)
@@ -52,13 +69,16 @@ final readonly class SessionHandoffProjector
         }
 
         $contents = file_get_contents($path);
+        if (!is_string($contents)) {
+            throw new RuntimeException('Unable to read Session handoff content: ' . $path);
+        }
 
-        return is_string($contents) ? $contents : '';
+        return $contents;
     }
 
     /**
      * The body of one `## <heading>` section, or null when it is absent or is
-     * still the scaffold's italic placeholder.
+     * still the scaffold's exact placeholder.
      */
     private function section(string $markdown, string $heading): ?string
     {
@@ -80,9 +100,11 @@ final readonly class SessionHandoffProjector
         $latest = $checkpoints[count($checkpoints) - 1];
         foreach (glob($session->path . '/checkpoints/' . $latest['id'] . '-*.md') ?: [] as $path) {
             $contents = file_get_contents($path);
-            if (is_string($contents)) {
-                return $this->meaningful(preg_replace('/^#[ \t].*$/m', '', $contents) ?? '');
+            if (!is_string($contents)) {
+                throw new RuntimeException('Unable to read Session handoff checkpoint: ' . $path);
             }
+
+            return $this->meaningful(preg_replace('/^#[ \t].*$/m', '', $contents) ?? '');
         }
 
         return null;
@@ -110,22 +132,21 @@ final readonly class SessionHandoffProjector
     }
 
     /**
-     * Content unless it is only scaffold guidance.
+     * Content unless it is only exact scaffold guidance.
      *
-     * The scaffold writes its instructions as italic lines. A section that
-     * still holds nothing else was never filled in, and reporting that
-     * placeholder as the next action would hand a resuming agent an
-     * instruction to invent one.
+     * Formatting is not authority: an agent may intentionally author italic
+     * Markdown. Only literals emitted by SessionScaffold are removed.
      */
     private function meaningful(string $body): ?string
     {
         $kept = [];
         foreach (preg_split('/\R/', $body) ?: [] as $line) {
             $line = rtrim($line);
-            if (trim($line) === '') {
+            $trimmed = trim($line);
+            if ($trimmed === '') {
                 continue;
             }
-            if (preg_match('/^\*[^*].*\*$/', trim($line)) === 1) {
+            if (in_array($trimmed, self::SCAFFOLD_PLACEHOLDERS, true)) {
                 continue;
             }
             $kept[] = $line;
