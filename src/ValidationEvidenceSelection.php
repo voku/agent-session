@@ -30,7 +30,7 @@ final readonly class ValidationEvidenceSelection
      */
     public function __construct(
         public int $contractRevision,
-        public ?string $implementationSnapshot,
+        public string $implementationSnapshot,
         public array $current,
         public array $supersededByImplementation,
         public array $supersededByRevision,
