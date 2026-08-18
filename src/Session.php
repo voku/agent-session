@@ -36,10 +36,10 @@ final readonly class Session
          * When and why this Session stopped being open working memory.
          *
          * A Session can be retired by a human (`close`) or deterministically by
-         * a governed owner that superseded the Run it served. Both look like
-         * `dropped` on disk, so the reason is recorded rather than inferred:
-         * once working memory is pruned, an unexplained `dropped` is the one
-         * state nobody can reconstruct.
+         * a governed owner that superseded the Run it served. Both may use the
+         * same closed status, so the reason is recorded rather than inferred
+         * while this pruneable Session still exists. Durable lifecycle
+         * provenance that must survive pruning belongs to the durable owner.
          */
         public ?string $closedAt = null,
         public ?string $closedReason = null,
