@@ -7,11 +7,12 @@ namespace voku\AgentSession;
 use RuntimeException;
 
 /**
- * More than one open Session exists for a single task.
+ * More than one open governed Session exists for a single task.
  *
- * A task has at most one open working-memory Session. Callers that must pick
- * exactly one Session cannot proceed here, and callers that only report state
- * need the offending ids rather than a rendered message, so both are carried.
+ * A task has at most one open governed working-memory Session; experiments are
+ * outside that rule. Callers that must pick exactly one Session cannot proceed
+ * here, and callers that only report state need the offending ids rather than a
+ * rendered message, so both are carried.
  */
 final class AmbiguousActiveSession extends RuntimeException
 {
@@ -21,7 +22,7 @@ final class AmbiguousActiveSession extends RuntimeException
         public readonly array $sessionIds,
     ) {
         parent::__construct(sprintf(
-            'Task %s has %d open Sessions (%s); exactly one open Session is allowed.',
+            'Task %s has %d open governed Sessions (%s); exactly one is allowed.',
             $taskId,
             count($sessionIds),
             implode(', ', $sessionIds),

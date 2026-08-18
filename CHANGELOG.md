@@ -20,11 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   owned by the durable lifecycle package rather than leaking back into working
   memory.
 - `agent-session close <id> --reason TEXT` and `agent-session list --task ID`.
-- The allocation rule ignores ephemeral Sessions in both directions. An
+- The allocation rule and `activeForTask()` both ignore ephemeral Sessions. An
   experiment is never approved and never meant to be finished, so nobody closes
   it; counting it would let a forgotten throwaway block its task's governed
   working memory permanently, which is the failure the flag exists to prevent.
-  `openForTask()` still reports it, because it is genuinely open.
+  The resume lookup counts exactly what the allocation rule counts, so a state
+  `create()` permits is never reported as corruption. `openForTask()` remains
+  the raw view and still reports an experiment, because it is genuinely open.
 - `SessionHandoffProjector` / `SessionHandoff` and `agent-session handoff <id>
   [--format md|json]` project a compact resume packet out of a Session's own
   working memory: goal, next action, latest checkpoint, recorded decisions and

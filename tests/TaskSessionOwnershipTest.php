@@ -293,6 +293,63 @@ final class TaskSessionOwnershipTest extends TestCase
         $store->create($this->root, 'TASK-A', 'second');
     }
 
+    /**
+     * The resume lookup counts what the allocation rule counts.
+     *
+     * `create()` permits an experiment beside governed work, so a lookup that
+     * called that same state corruption would be a second definition of
+     * "active" inside one class.
+     */
+    public function testTheResumeLookupSkipsAnExperimentBesideGovernedWork(): void
+    {
+        $store = new SessionStore();
+        $governed = $store->create($this->root, 'TASK-A', 'governed');
+        $store->create($this->root, 'TASK-A', 'experiment', null, null, true);
+
+        self::assertSame($governed->id, $store->activeForTask($this->root, 'TASK-A')?->id);
+
+        // The raw view still reports both, because both are genuinely open.
+        self::assertCount(2, $store->openForTask($this->root, 'TASK-A'));
+    }
+
+    public function testAnExperimentIsNeverResumedAsGovernedWorkingMemory(): void
+    {
+        $store = new SessionStore();
+        $store->create($this->root, 'TASK-A', 'experiment', null, null, true);
+
+        self::assertNull($store->activeForTask($this->root, 'TASK-A'));
+    }
+
+    public function testSeveralExperimentsAreNotAnAmbiguousGovernedState(): void
+    {
+        $store = new SessionStore();
+        $store->create($this->root, 'TASK-A', 'exp-one', null, null, true);
+        $store->create($this->root, 'TASK-A', 'exp-two', null, null, true);
+
+        self::assertNull($store->activeForTask($this->root, 'TASK-A'));
+        self::assertCount(2, $store->openForTask($this->root, 'TASK-A'));
+    }
+
+    public function testTwoOpenGovernedSessionsRemainAmbiguous(): void
+    {
+        $store = new SessionStore();
+        $first = $store->create($this->root, 'TASK-A', 'first');
+        // Legacy state: written before the allocation rule existed.
+        $second = $store->create($this->root, 'TASK-A', 'second', null, null, true);
+        $metadata = $second->path . '/session.json';
+        $data = json_decode((string) file_get_contents($metadata), true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($data);
+        $data['ephemeral'] = false;
+        file_put_contents($metadata, json_encode($data, JSON_THROW_ON_ERROR));
+
+        try {
+            $store->activeForTask($this->root, 'TASK-A');
+            self::fail('Expected an ambiguous governed Session.');
+        } catch (AmbiguousActiveSession $exception) {
+            self::assertSame([$first->id, $second->id], $exception->sessionIds);
+        }
+    }
+
     private function removeDirectory(string $path): void
     {
         if (!is_dir($path)) {

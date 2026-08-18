@@ -132,8 +132,8 @@ use voku\AgentSession\SessionStore;
 
 $sessions = new SessionStore();
 
-$open = $sessions->openForTask($sessionsRoot, $taskId);      // report the real state
-$active = $sessions->activeForTask($sessionsRoot, $taskId); // exactly one, or null
+$open = $sessions->openForTask($sessionsRoot, $taskId);      // raw view: every open Session
+$active = $sessions->activeForTask($sessionsRoot, $taskId); // governed resume: exactly one, or null
 ```
 
 `activeForTask()` throws `AmbiguousActiveSession` — carrying the task id and the
@@ -142,12 +142,18 @@ than one open Session. A host that only renders state uses `openForTask()` and
 counts, because "two are open" is something a human has to resolve, not
 something the store may hide by picking a winner.
 
-An **ephemeral** Session is outside that allocation rule in both directions: it
-never blocks a governed Session, and a governed Session never blocks it. An
-experiment is created to try a command out, is never approved and is never meant
-to be finished — so nobody closes it, and counting it would let a forgotten
-throwaway block the real work for its task forever. `openForTask()` still
-reports it, because it is genuinely open; only allocation ignores it.
+An **ephemeral** Session is outside that rule in both directions: it never
+blocks a governed Session, and a governed Session never blocks it. An experiment
+is created to try a command out, is never approved and is never meant to be
+finished — so nobody closes it, and counting it would let a forgotten throwaway
+block the real work for its task forever.
+
+`activeForTask()` skips experiments for the same reason, so the resume lookup
+counts exactly what the allocation rule counts. Permitting a state at `create()`
+that `activeForTask()` then called corruption would be two definitions of
+"active" inside one class. `openForTask()` remains the honest raw view — for
+reporting, and for resolving a session id a human typed — because an experiment
+is genuinely open; it is just not what a governed Run resumes.
 
 ### Retiring working memory
 

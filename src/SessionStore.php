@@ -192,18 +192,26 @@ final class SessionStore
     }
 
     /**
-     * The single open Session for one task, or null when none is open.
+     * The single open governed Session for one task, or null when none is open.
      *
-     * New and rehydrated Sessions are serialized through the store lock and are
-     * rejected while another Session for the task remains open. More than one
-     * open Session can therefore only be a pre-existing or externally-corrupted
-     * state, which callers must report rather than resolve by picking a winner.
+     * This is the canonical resume lookup, and it counts the same Sessions the
+     * allocation rule counts. Experiments are excluded from both: allowing a
+     * state at `create()` that this method then reports as corruption would be
+     * two definitions of "active" in one class, and the state permitted by the
+     * more specific one always wins.
      *
-     * @throws AmbiguousActiveSession when more than one Session is open
+     * `openForTask()` stays the honest raw view for reporting and for resolving
+     * a session id a human typed - an experiment is genuinely open, it is just
+     * not what a governed Run resumes.
+     *
+     * @throws AmbiguousActiveSession when more than one governed Session is open
      */
     public function activeForTask(string $root, string $taskId): ?Session
     {
-        $open = $this->openForTask($root, $taskId);
+        $open = array_values(array_filter(
+            $this->openForTask($root, $taskId),
+            static fn (Session $session): bool => !$session->ephemeral,
+        ));
         if (count($open) > 1) {
             throw new AmbiguousActiveSession(
                 trim($taskId),
