@@ -88,6 +88,47 @@ For the governed lifecycle, use `agent-loop workflow plan`, `approve`, `learn`,
 and `close`. The standalone Session CLI deliberately exposes only pruneable
 working-memory operations and validation observations.
 
+## PHP host integration
+
+Lifecycle/orchestration packages should use `SessionStore` directly instead of
+shelling out to the Session CLI or recreating Session storage rules.
+
+When durable workflow state already identifies the exact historical Session and
+that pruneable working-memory directory has disappeared, use `rehydrate()` to
+restore **that same Session identity**:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use voku\AgentSession\SessionStore;
+
+$session = (new SessionStore())->rehydrate(
+    $sessionsRoot,
+    $exactSessionId,
+    $taskId,
+    $createdBy,
+    $baseCommit,
+);
+```
+
+Use `create()` when a genuinely new Session is required. Use `rehydrate()` only
+when a durable owner already supplies the exact Session id to restore after
+working memory was pruned. Rehydration does not invent Task, Contract, Run, or
+approval authority and must not be used to silently rebind a governed Run to a
+different active Session.
+
+That distinction is intentional:
+
+- `create()` allocates fresh pruneable working context;
+- `rehydrate()` restores caller-authorized historical identity;
+- Session state remains pruneable either way;
+- durable lifecycle identity remains owned outside this package.
+
+Host code should treat conflicting or unreadable existing Session state as an
+explicit failure rather than deleting or replacing it to make a resume succeed.
+
 ## Where it fits
 
 This is one layer of the loop. It pairs with:
