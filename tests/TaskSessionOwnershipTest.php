@@ -132,6 +132,43 @@ final class TaskSessionOwnershipTest extends TestCase
         $store->setStatus($session, SessionStatus::ACTIVE);
     }
 
+    public function testStaleSessionCannotMoveAStatusAnotherProcessAlreadyClosed(): void
+    {
+        $store = new SessionStore();
+        $session = $store->create($this->root, 'TASK-A');
+        $stale = $store->load($this->root, $session->id);
+        $store->close($session, SessionStatus::DONE, 'finished');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('is closed as done and cannot be moved to blocked');
+
+        $store->setStatus($stale, SessionStatus::BLOCKED);
+    }
+
+    public function testStaleWorkingMemoryMutationsPreserveCurrentClosureMetadata(): void
+    {
+        $store = new SessionStore();
+        $session = $store->create($this->root, 'TASK-A');
+        $stale = $store->load($this->root, $session->id);
+        $closed = $store->close($session, SessionStatus::DONE, 'finished');
+
+        $claimed = $store->claim($stale, 'other-agent', null);
+        self::assertSame(SessionStatus::DONE, $claimed->status);
+        self::assertSame($closed->closedAt, $claimed->closedAt);
+        self::assertSame('finished', $claimed->closedReason);
+
+        $checkpointed = $store->addCheckpoint($stale, 'Late note', 'Recorded from stale working memory.');
+        self::assertSame(SessionStatus::DONE, $checkpointed->status);
+        self::assertSame($closed->closedAt, $checkpointed->closedAt);
+        self::assertSame('finished', $checkpointed->closedReason);
+
+        $store->appendRecord($stale, 'decision', 'Late decision', 'Do not resurrect status.');
+        $reloaded = $store->load($this->root, $session->id);
+        self::assertSame(SessionStatus::DONE, $reloaded->status);
+        self::assertSame($closed->closedAt, $reloaded->closedAt);
+        self::assertSame('finished', $reloaded->closedReason);
+    }
+
     public function testClosedSessionCannotBeRelabelledToAnotherClosedStatus(): void
     {
         $store = new SessionStore();
