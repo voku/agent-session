@@ -242,6 +242,57 @@ final class TaskSessionOwnershipTest extends TestCase
         self::assertNull($reloaded->closedReason);
     }
 
+    /**
+     * The ephemeral flag exists so a throwaway never stands in the way of real
+     * work. It is created to try a command out, never approved and never meant
+     * to be finished - so nobody closes it, and counting it as the task's open
+     * Session would block the governed one forever.
+     */
+    public function testAForgottenExperimentDoesNotBlockGovernedWorkingMemory(): void
+    {
+        $store = new SessionStore();
+        $experiment = $store->create($this->root, 'TASK-A', 'experiment', null, null, true);
+        self::assertTrue($experiment->ephemeral);
+
+        $governed = $store->create($this->root, 'TASK-A', 'governed');
+
+        self::assertNotSame($experiment->id, $governed->id);
+        self::assertFalse($governed->ephemeral);
+    }
+
+    public function testAnExperimentCanStartBesideGovernedWork(): void
+    {
+        $store = new SessionStore();
+        $store->create($this->root, 'TASK-A', 'governed');
+
+        $experiment = $store->create($this->root, 'TASK-A', 'experiment', null, null, true);
+
+        self::assertTrue($experiment->ephemeral);
+        self::assertCount(2, $store->openForTask($this->root, 'TASK-A'));
+    }
+
+    public function testGovernedWorkingMemoryCanBeRehydratedBesideAnOpenExperiment(): void
+    {
+        $store = new SessionStore();
+        $store->create($this->root, 'TASK-A', 'experiment', null, null, true);
+
+        $rehydrated = $store->rehydrate($this->root, '2026-06-07-governed', 'TASK-A', 'lars', 'abc123');
+
+        self::assertSame('2026-06-07-governed', $rehydrated->id);
+        self::assertFalse($rehydrated->ephemeral);
+    }
+
+    public function testTwoOpenGovernedSessionsForOneTaskAreStillRefused(): void
+    {
+        $store = new SessionStore();
+        $store->create($this->root, 'TASK-A', 'first');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('already has open Session');
+
+        $store->create($this->root, 'TASK-A', 'second');
+    }
+
     private function removeDirectory(string $path): void
     {
         if (!is_dir($path)) {

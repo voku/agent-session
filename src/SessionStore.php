@@ -42,7 +42,7 @@ final class SessionStore
 
         $lock = $this->lockRoot($root);
         try {
-            $this->assertNoOpenSession($root, $taskId);
+            $this->assertNoOpenSession($root, $taskId, $ephemeral);
 
             return $this->createAtId(
                 $root,
@@ -88,7 +88,7 @@ final class SessionStore
             if (file_exists($path) || is_link($path)) {
                 throw new RuntimeException(sprintf('Cannot rehydrate existing Session: %s', $id));
             }
-            $this->assertNoOpenSession($root, $taskId);
+            $this->assertNoOpenSession($root, $taskId, $ephemeral);
 
             return $this->createAtId($root, $id, $taskId, $by, $baseCommit, $ephemeral);
         } finally {
@@ -440,9 +440,25 @@ final class SessionStore
         return dirname($session->path);
     }
 
-    private function assertNoOpenSession(string $root, string $taskId): void
+    /**
+     * Refuse a second open Session for one task - counting governed work only.
+     *
+     * An ephemeral Session is an experiment that is never approved and never
+     * meant to be finished, so nobody closes it. Letting one block allocation
+     * would rebuild the failure the flag exists to prevent: a throwaway
+     * standing in the way of the real work, which is a gate punishing the
+     * wrong thing. It neither blocks a governed Session nor is blocked by one.
+     */
+    private function assertNoOpenSession(string $root, string $taskId, bool $ephemeral): void
     {
-        $open = $this->openForTask($root, $taskId);
+        if ($ephemeral) {
+            return;
+        }
+
+        $open = array_values(array_filter(
+            $this->openForTask($root, $taskId),
+            static fn (Session $session): bool => !$session->ephemeral,
+        ));
         if ($open === []) {
             return;
         }
@@ -568,9 +584,11 @@ final class SessionStore
 
     private function unlockRoot(SplFileObject $lock): void
     {
-        if (!$lock->flock(LOCK_UN)) {
-            throw new RuntimeException('Unable to unlock Session store.');
-        }
+        // This runs in a `finally`, so throwing here would replace an in-flight
+        // exception with a message about the lock and destroy the real
+        // diagnosis. Releasing the handle drops the lock regardless, so a
+        // failed explicit unlock carries nothing worth losing that error over.
+        $lock->flock(LOCK_UN);
     }
 
     /** @return array<string, mixed> */

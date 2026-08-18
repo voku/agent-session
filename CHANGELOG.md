@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `SessionStore::activeForTask()`, `openForTask()` and `allForTask()` own the
-  "one open Session per task" rule. `create()` and `rehydrate()` refuse to
+  "one open governed Session per task" rule. `create()` and `rehydrate()` refuse to
   allocate parallel open working memory for the same task, while the selection
   APIs let reporting callers expose legacy or externally-corrupted ambiguity
   instead of silently picking a winner.
@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   owned by the durable lifecycle package rather than leaking back into working
   memory.
 - `agent-session close <id> --reason TEXT` and `agent-session list --task ID`.
+- The allocation rule ignores ephemeral Sessions in both directions. An
+  experiment is never approved and never meant to be finished, so nobody closes
+  it; counting it would let a forgotten throwaway block its task's governed
+  working memory permanently, which is the failure the flag exists to prevent.
+  `openForTask()` still reports it, because it is genuinely open.
 - `SessionHandoffProjector` / `SessionHandoff` and `agent-session handoff <id>
   [--format md|json]` project a compact resume packet out of a Session's own
   working memory: goal, next action, latest checkpoint, recorded decisions and

@@ -119,10 +119,10 @@ $session = (new SessionStore())->rehydrate(
 
 ### One open Session per task
 
-A task has at most one open working-memory Session. That rule belongs to this
-package: `create()` and `rehydrate()` refuse to allocate parallel open working
-memory for the same task, while hosts use the owner APIs instead of re-deriving
-selection from `all()`:
+A task has at most one open **governed** working-memory Session. That rule
+belongs to this package: `create()` and `rehydrate()` refuse to allocate
+parallel open working memory for the same task, while hosts use the owner APIs
+instead of re-deriving selection from `all()`:
 
 ```php
 <?php
@@ -141,6 +141,13 @@ offending Session ids — when legacy or externally modified state contains more
 than one open Session. A host that only renders state uses `openForTask()` and
 counts, because "two are open" is something a human has to resolve, not
 something the store may hide by picking a winner.
+
+An **ephemeral** Session is outside that allocation rule in both directions: it
+never blocks a governed Session, and a governed Session never blocks it. An
+experiment is created to try a command out, is never approved and is never meant
+to be finished — so nobody closes it, and counting it would let a forgotten
+throwaway block the real work for its task forever. `openForTask()` still
+reports it, because it is genuinely open; only allocation ignores it.
 
 ### Retiring working memory
 
@@ -162,7 +169,7 @@ A closed Session **status** is terminal: it cannot be reopened or relabelled as
 the other closed status, and repeating the identical close is a no-op. Use
 `create()` for genuinely fresh working memory and `rehydrate()` for
 caller-authorized historical identity. Both refuse to create parallel open
-working memory for a task that already has an open Session.
+working memory for a task that already has an open governed Session.
 
 ### Resuming a session
 
