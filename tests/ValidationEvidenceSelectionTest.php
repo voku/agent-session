@@ -101,16 +101,16 @@ final class ValidationEvidenceSelectionTest extends TestCase
         self::assertSame(ValidationStatus::FAILED, $selection->failures()[0]->status);
     }
 
-    public function testWithoutASnapshotOnlyTheContractRevisionBinds(): void
+    public function testSnapshotBoundEvidenceRequiresTheExactRequestedSnapshot(): void
     {
         $this->record(2, 'composer ci', ValidationStatus::PASSED, 0, self::SNAPSHOT_A);
-        $this->record(1, 'composer ci', ValidationStatus::PASSED, 0, self::SNAPSHOT_B);
+        $this->record(2, 'composer ci', ValidationStatus::PASSED, 0, null);
 
-        $selection = $this->evidence->select($this->session, 2, null, ['composer ci']);
+        $selection = $this->evidence->select($this->session, 2, self::SNAPSHOT_B, ['composer ci']);
 
-        self::assertTrue($selection->isFullyObserved());
-        self::assertSame(self::SNAPSHOT_A, $selection->currentFor('composer ci')?->implementationSnapshot);
-        self::assertNull($selection->implementationSnapshot);
+        self::assertFalse($selection->isFullyObserved());
+        self::assertNull($selection->currentFor('composer ci'));
+        self::assertSame(['composer ci'], $selection->supersededByImplementation);
     }
 
     public function testSnapshotlessEvidenceDoesNotSatisfyASnapshotBoundQuestion(): void
@@ -138,15 +138,23 @@ final class ValidationEvidenceSelectionTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('positive Contract revision');
 
-        $this->evidence->select($this->session, 0, null, ['composer ci']);
+        $this->evidence->select($this->session, 0, self::SNAPSHOT_A, ['composer ci']);
     }
 
     public function testSelectionRejectsAMalformedSnapshot(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('sha256:<64 lowercase hex>');
+        $this->expectExceptionMessage('implementation snapshot sha256:<64 lowercase hex>');
 
         $this->evidence->select($this->session, 1, 'not-a-digest', ['composer ci']);
+    }
+
+    public function testSelectionRejectsAnEmptySnapshot(): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('implementation snapshot sha256:<64 lowercase hex>');
+
+        $this->evidence->select($this->session, 1, ' ', ['composer ci']);
     }
 
     public function testSelectionRejectsAnEmptyCommand(): void
@@ -154,12 +162,12 @@ final class ValidationEvidenceSelectionTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('non-empty commands');
 
-        $this->evidence->select($this->session, 1, null, ['  ']);
+        $this->evidence->select($this->session, 1, self::SNAPSHOT_A, ['  ']);
     }
 
     public function testNoObligationsSelectsNothingRatherThanFailing(): void
     {
-        $selection = $this->evidence->select($this->session, 1, null, []);
+        $selection = $this->evidence->select($this->session, 1, self::SNAPSHOT_A, []);
 
         self::assertTrue($selection->isFullyObserved());
         self::assertSame([], $selection->current);
