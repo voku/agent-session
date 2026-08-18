@@ -205,6 +205,21 @@ final class TaskSessionOwnershipTest extends TestCase
         $store->close($session, SessionStatus::BLOCKED);
     }
 
+    public function testSetStatusRejectsAReasonForAnAlreadyActiveSessionWithTheCloseReasonRule(): void
+    {
+        $store = new SessionStore();
+        $session = $store->create($this->root, 'TASK-A');
+
+        // The Session is already SessionStatus::ACTIVE, so this call also hits
+        // the same-status branch. It must still fail on the close-reason rule,
+        // not on "its recorded reason cannot be rewritten" -- an open Session
+        // has no closedReason to rewrite in the first place.
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('A close reason only applies to a closed Session status.');
+
+        $store->setStatus($session, SessionStatus::ACTIVE, 'why');
+    }
+
     public function testCheckpointsDoNotDropClosureProvenanceWhileSessionStillExists(): void
     {
         $store = new SessionStore();

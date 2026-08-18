@@ -265,8 +265,13 @@ final class SessionStore
         try {
             $current = $this->load($root, $session->id);
 
+            $reason = $reason === null || trim($reason) === '' ? null : trim($reason);
+            if ($reason !== null && !$status->isClosed()) {
+                throw new RuntimeException('A close reason only applies to a closed Session status.');
+            }
+
             if ($current->status === $status) {
-                if ($reason === null || trim($reason) === '' || $current->closedReason === trim($reason)) {
+                if ($reason === null || $current->closedReason === $reason) {
                     return $current;
                 }
 
@@ -284,11 +289,6 @@ final class SessionStore
                     $current->status->value,
                     $status->value,
                 ));
-            }
-
-            $reason = $reason === null || trim($reason) === '' ? null : trim($reason);
-            if ($reason !== null && !$status->isClosed()) {
-                throw new RuntimeException('A close reason only applies to a closed Session status.');
             }
 
             $updated = new Session(
