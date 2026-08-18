@@ -200,6 +200,39 @@ final class CliTest extends TestCase
         self::assertStringContainsString('Session not found: no-such-session', (string) stream_get_contents($err));
     }
 
+    public function testHandoffRendersAResumePacket(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'handoff', '--root', $this->root]));
+        $id = $this->firstSessionId();
+        self::assertSame(0, $this->invoke([
+            'checkpoint', $id, '--title', 'Implementation', '--body', 'Selector moved into the store.', '--root', $this->root,
+        ]));
+
+        ob_start();
+        self::assertSame(0, $this->invoke(['handoff', $id, '--root', $this->root]));
+        $markdown = (string) ob_get_clean();
+
+        self::assertStringContainsString('# Session handoff: ' . $id, $markdown);
+        self::assertStringContainsString('Selector moved into the store.', $markdown);
+
+        ob_start();
+        self::assertSame(0, $this->invoke(['handoff', $id, '--format', 'json', '--root', $this->root]));
+        $packet = json_decode((string) ob_get_clean(), true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertIsArray($packet);
+        self::assertSame('TASK-1', $packet['task_id']);
+        self::assertTrue($packet['resumable']);
+    }
+
+    public function testHandoffRejectsAnUnknownFormat(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'format', '--root', $this->root]));
+
+        ob_start();
+        self::assertSame(1, $this->invoke(['handoff', $this->firstSessionId(), '--format', 'yaml', '--root', $this->root]));
+        ob_end_clean();
+    }
+
     private function invoke(array $args): int
     {
         return (new Cli())->run(['agent-session', ...$args]);

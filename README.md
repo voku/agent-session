@@ -66,6 +66,8 @@ agent-session close 2026-06-07-remove-session-access --status dropped --reason "
 agent-session list --status active
 agent-session list --task task.002.remove-session-access
 agent-session show  2026-06-07-remove-session-access
+agent-session handoff 2026-06-07-remove-session-access            # resume packet for a fresh agent
+agent-session handoff 2026-06-07-remove-session-access --format json
 
 # retention: working memory must be able to disappear
 agent-session prune --keep-days 30 --status done,dropped --dry-run
@@ -155,6 +157,33 @@ closed status, and repeating the identical close is a no-op. Use `create()` for
 fresh working memory and `rehydrate()` for caller-authorized historical
 identity — reviving a finished Session would make a governed Run look live again
 without any owner having decided that it is.
+
+### Resuming a session
+
+A fresh agent picking up an existing Session does not need the whole
+working-memory directory; it needs what the previous one already established:
+
+```bash
+agent-session handoff 2026-06-07-remove-session-access
+```
+
+```php
+$handoff = (new SessionHandoffProjector())->project($session);
+
+$handoff->nextAction;      // the single next concrete step, or null if none was recorded
+$handoff->latestCheckpoint;
+$handoff->decisions;       // titles; the reasoning stays in decisions.md
+$handoff->failures();      // validation that already failed - the costliest thing to rediscover
+$handoff->isResumable();   // false once the Session is closed, with closedReason saying why
+```
+
+The packet is **derived on read and never stored**. Working memory stays
+pruneable, and the handoff does not become a second source of durable truth.
+
+It also reports absence honestly. A section still holding its scaffold
+placeholder, or a plan the agent rewrote without the expected headings, is
+reported as empty rather than guessed at — handing on `*the single next concrete
+step*` as a next action would tell a resuming agent to invent one.
 
 ### Selecting validation evidence
 

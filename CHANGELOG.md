@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an unexplained `dropped` is the one thing nobody can reconstruct after the
   Session is pruned.
 - `agent-session close <id> --reason TEXT` and `agent-session list --task ID`.
+- `SessionHandoffProjector` / `SessionHandoff` and `agent-session handoff <id>
+  [--format md|json]` project a resume packet out of a Session's own working
+  memory: goal, next action, latest checkpoint, decisions, still-unvalidated
+  assumptions, and the validation already run - including what failed. An agent
+  resuming a Session otherwise spends its first budget re-deriving what the
+  previous one already knew, and redoes work whose only record is prose it
+  skimmed. The packet is derived on read, never stored, so working memory stays
+  pruneable and no second source of durable truth appears.
 - `ValidationEvidenceStore::select()` and `ValidationEvidenceSelection` answer
   "is this obligation validated *for this exact state*?". The evidence file is
   append-only and outlives both the Contract revision and the implementation

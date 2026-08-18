@@ -70,6 +70,7 @@ final class Cli
                 'close' => $this->closeCommand($tokens),
                 'list' => $this->listCommand($tokens),
                 'show' => $this->showCommand($tokens),
+                'handoff' => $this->handoffCommand($tokens),
                 'validation' => $this->validationCommand($tokens),
                 'prune' => $this->pruneCommand($tokens),
                 'help', '--help', '-h' => $this->helpCommand(),
@@ -248,6 +249,27 @@ final class Cli
     }
 
     /** @param list<string> $tokens */
+    private function handoffCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $this->assertOnlyOptions($parsed['options'], ['root', 'format']);
+        $root = $this->resolveRoot($parsed['options']);
+        $session = $this->store->load($root, $this->requireId($parsed['arguments']));
+
+        $format = $this->stringOption($parsed['options'], 'format') ?? 'md';
+        if (!in_array($format, ['md', 'json'], true)) {
+            throw new \InvalidArgumentException('--format must be md or json.');
+        }
+
+        $handoff = (new SessionHandoffProjector($this->validationEvidence))->project($session);
+        fwrite($this->out, $format === 'json'
+            ? json_encode($handoff->toArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n"
+            : $handoff->toMarkdown());
+
+        return 0;
+    }
+
+    /** @param list<string> $tokens */
     private function validationCommand(array $tokens): int
     {
         $action = array_shift($tokens) ?? 'help';
@@ -344,6 +366,7 @@ final class Cli
           close       Close a session.   <id> --status done|dropped [--reason TEXT]
           list        List sessions.     [--status STATUS] [--task ID]
           show        Show metadata.     <id>
+          handoff     Resume packet.     <id> [--format md|json]
           validation  Record run-local validation observation. <record> <id> [options]
           prune       Retention cleanup. [--keep-days N] [--status done,dropped] [--dry-run]
 
