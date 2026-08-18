@@ -32,6 +32,17 @@ final readonly class Session
          * blocks every other session's close is a gate punishing the wrong thing.
          */
         public bool $ephemeral = false,
+        /**
+         * When and why this Session stopped being open working memory.
+         *
+         * A Session can be retired by a human (`close`) or deterministically by
+         * a governed owner that superseded the Run it served. Both may use the
+         * same closed status, so the reason is recorded rather than inferred
+         * while this pruneable Session still exists. Durable lifecycle
+         * provenance that must survive pruning belongs to the durable owner.
+         */
+        public ?string $closedAt = null,
+        public ?string $closedReason = null,
     ) {
     }
 
@@ -41,7 +52,7 @@ final readonly class Session
     public function toArray(): array
     {
         return [
-            'schema_version' => '1.0',
+            'schema_version' => '1.1',
             'id' => $this->id,
             'task_id' => $this->taskId,
             'status' => $this->status->value,
@@ -52,6 +63,8 @@ final readonly class Session
             'updated_at' => $this->updatedAt,
             'checkpoints' => $this->checkpoints,
             'ephemeral' => $this->ephemeral,
+            'closed_at' => $this->closedAt,
+            'closed_reason' => $this->closedReason,
         ];
     }
 }

@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- `SessionStore::activeForTask()`, `openForTask()` and `allForTask()` own the
+  "one open governed Session per task" rule. `create()` and `rehydrate()` refuse to
+  allocate parallel open working memory for the same task, while the selection
+  APIs let reporting callers expose legacy or externally-corrupted ambiguity
+  instead of silently picking a winner.
+- `Session::$closedAt` / `$closedReason` and `SessionStore::close()` record
+  *why* working memory stopped being open while that pruneable Session still
+  exists. Durable lifecycle provenance that must survive Session pruning remains
+  owned by the durable lifecycle package rather than leaking back into working
+  memory.
+- `agent-session close <id> --reason TEXT` and `agent-session list --task ID`.
+- The allocation rule and `activeForTask()` both ignore ephemeral Sessions. An
+  experiment is never approved and never meant to be finished, so nobody closes
+  it; counting it would let a forgotten throwaway block its task's governed
+  working memory permanently, which is the failure the flag exists to prevent.
+  The resume lookup counts exactly what the allocation rule counts, so a state
+  `create()` permits is never reported as corruption. `openForTask()` remains
+  the raw view and still reports an experiment, because it is genuinely open.
+- `SessionHandoffProjector` / `SessionHandoff` and `agent-session handoff <id>
+  [--format md|json]` project a compact resume packet out of a Session's own
+  working memory: goal, next action, latest checkpoint, recorded decisions and
+  assumptions, plus validation history. The projection deliberately does not
+  infer which assumptions are still unvalidated or which historical validation
+  describes the current implementation. The packet is derived on read, never
+  stored, so working memory stays pruneable and no second source of durable
+  truth or lifecycle authority appears.
+- `ValidationEvidenceStore::select()` and `ValidationEvidenceSelection` answer
+  "is this obligation validated *for this exact state*?". Exact-state selection
+  requires both the Contract revision and implementation snapshot. Snapshotless
+  legacy observations remain readable but cannot satisfy a snapshot-bound
+  currentness question. The selection reports never-recorded, superseded
+  implementation, and superseded Contract revision separately instead of
+  allowing historical PASS evidence to read as current.
+
+### Changed
+
+- A closed Session **status** is terminal. `SessionStore::setStatus()` refuses to
+  reopen it or relabel it as the other closed status, and repeating the identical
+  close is idempotent. `create()` allocates fresh working memory and
+  `rehydrate()` restores caller-authorized historical identity, but both reject a
+  task that already has open working memory.
+- `SessionHandoff::recordedFailures()` exposes historical failed observations by
+  name instead of implying they are the current validation verdict. Markdown
+  output labels validation as history and carries Contract revision plus
+  implementation snapshot identity for every observation.
+- `Cli` writes to `php://output` / `php://stderr` instead of the `STDOUT` /
+  `STDERR` constants, and accepts explicit streams. A PHP host embedding the CLI
+  in-process can now capture or discard its output with ordinary output
+  buffering, instead of installing a stream filter to silence a library it
+  called itself.
+- `session.json` is schema `1.1`. The added fields are optional and `1.0`
+  metadata still loads unchanged.
+
 ## 0.6.1 - 2026-08-17
 
 ### Fixed

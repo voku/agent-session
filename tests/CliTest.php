@@ -120,6 +120,118 @@ final class CliTest extends TestCase
         ]));
     }
 
+    public function testCloseRecordsTheReasonWorkingMemoryWasRetired(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'retired', '--root', $this->root]));
+        $id = $this->firstSessionId();
+
+        ob_start();
+        self::assertSame(0, $this->invoke([
+            'close', $id,
+            '--status', 'dropped',
+            '--reason', 'superseded by approved Contract revision 2',
+            '--root', $this->root,
+        ]));
+        $output = (string) ob_get_clean();
+
+        self::assertStringContainsString('superseded by approved Contract revision 2', $output);
+        $session = (new SessionStore())->load($this->root, $id);
+        self::assertSame(SessionStatus::DROPPED, $session->status);
+        self::assertSame('superseded by approved Contract revision 2', $session->closedReason);
+    }
+
+    public function testCloseRefusesToReopenOrRelabelARetiredSession(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'terminal', '--root', $this->root]));
+        $id = $this->firstSessionId();
+
+        ob_start();
+        self::assertSame(0, $this->invoke(['close', $id, '--status', 'done', '--root', $this->root]));
+        self::assertSame(1, $this->invoke(['close', $id, '--status', 'dropped', '--root', $this->root]));
+        ob_end_clean();
+
+        self::assertSame(SessionStatus::DONE, (new SessionStore())->load($this->root, $id)->status);
+    }
+
+    public function testListCanBeScopedToOneTask(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'one', '--root', $this->root]));
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-2', '--slug', 'two', '--root', $this->root]));
+
+        ob_start();
+        self::assertSame(0, $this->invoke(['list', '--task', 'TASK-2', '--root', $this->root]));
+        $output = (string) ob_get_clean();
+
+        self::assertStringContainsString('task=TASK-2', $output);
+        self::assertStringNotContainsString('task=TASK-1', $output);
+    }
+
+    /**
+     * A PHP host embedding this CLI must be able to capture everything it
+     * prints. Writing to the `STDOUT` constant escapes host output buffering
+     * and corrupts a structured host response that is being assembled around
+     * the call.
+     */
+    public function testEmbeddingHostCanCaptureAllCliOutput(): void
+    {
+        ob_start();
+        $exit = $this->invoke(['start', '--task', 'TASK-1', '--slug', 'captured', '--root', $this->root]);
+        $captured = (string) ob_get_clean();
+
+        self::assertSame(0, $exit);
+        self::assertStringContainsString('Started session:', $captured);
+    }
+
+    public function testEmbeddingHostCanRedirectCliOutputToItsOwnStream(): void
+    {
+        $out = fopen('php://memory', 'w+b');
+        $err = fopen('php://memory', 'w+b');
+        self::assertIsResource($out);
+        self::assertIsResource($err);
+
+        $cli = new Cli(null, null, $out, $err);
+        self::assertSame(0, $cli->run(['agent-session', 'start', '--task', 'TASK-1', '--slug', 'piped', '--root', $this->root]));
+        self::assertSame(1, $cli->run(['agent-session', 'show', 'no-such-session', '--root', $this->root]));
+
+        rewind($out);
+        rewind($err);
+        self::assertStringContainsString('Started session:', (string) stream_get_contents($out));
+        self::assertStringContainsString('Session not found: no-such-session', (string) stream_get_contents($err));
+    }
+
+    public function testHandoffRendersAResumePacket(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'handoff', '--root', $this->root]));
+        $id = $this->firstSessionId();
+        self::assertSame(0, $this->invoke([
+            'checkpoint', $id, '--title', 'Implementation', '--body', 'Selector moved into the store.', '--root', $this->root,
+        ]));
+
+        ob_start();
+        self::assertSame(0, $this->invoke(['handoff', $id, '--root', $this->root]));
+        $markdown = (string) ob_get_clean();
+
+        self::assertStringContainsString('# Session handoff: ' . $id, $markdown);
+        self::assertStringContainsString('Selector moved into the store.', $markdown);
+
+        ob_start();
+        self::assertSame(0, $this->invoke(['handoff', $id, '--format', 'json', '--root', $this->root]));
+        $packet = json_decode((string) ob_get_clean(), true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertIsArray($packet);
+        self::assertSame('TASK-1', $packet['task_id']);
+        self::assertTrue($packet['resumable']);
+    }
+
+    public function testHandoffRejectsAnUnknownFormat(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'format', '--root', $this->root]));
+
+        ob_start();
+        self::assertSame(1, $this->invoke(['handoff', $this->firstSessionId(), '--format', 'yaml', '--root', $this->root]));
+        ob_end_clean();
+    }
+
     /** @param list<string> $args */
     private function invoke(array $args): int
     {

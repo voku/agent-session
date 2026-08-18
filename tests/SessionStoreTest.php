@@ -86,10 +86,11 @@ final class SessionStoreTest extends TestCase
         self::assertNull($loaded->claimedBy);
     }
 
-    public function testGeneratesUniqueIdsForSameTaskAndDay(): void
+    public function testGeneratesUniqueIdsForRepeatedTaskAfterPreviousSessionClosed(): void
     {
         $store = new SessionStore();
         $a = $store->create($this->root, 'task.dup', 'dup');
+        $store->close($a, SessionStatus::DONE);
         $b = $store->create($this->root, 'task.dup', 'dup');
 
         self::assertNotSame($a->id, $b->id);
@@ -108,8 +109,6 @@ final class SessionStoreTest extends TestCase
         self::assertSame('002', $session->checkpoints[1]['id']);
         self::assertFileExists($session->path . '/checkpoints/001-discovery.md');
         self::assertStringContainsString('002 Implementation', (string) file_get_contents($session->path . '/checkpoints/index.md'));
-
-        // persisted
         self::assertCount(2, $store->load($this->root, $session->id)->checkpoints);
     }
 
@@ -166,14 +165,14 @@ final class SessionStoreTest extends TestCase
         $store->setStatus($recent, SessionStatus::DONE);
 
         $active = $store->create($this->root, 'task.active', 'active');
-        $this->backdate($active, '2000-01-01T00:00:00+00:00'); // old but still active
+        $this->backdate($active, '2000-01-01T00:00:00+00:00');
 
         $removed = $store->prune($this->root, 30, [SessionStatus::DONE, SessionStatus::DROPPED]);
 
         self::assertSame([$old->id], $removed);
         self::assertFalse($store->exists($this->root, $old->id));
         self::assertTrue($store->exists($this->root, $recent->id));
-        self::assertTrue($store->exists($this->root, $active->id)); // active is never pruned
+        self::assertTrue($store->exists($this->root, $active->id));
     }
 
     public function testPruneDryRunRemovesNothing(): void
