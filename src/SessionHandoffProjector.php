@@ -68,7 +68,12 @@ final readonly class SessionHandoffProjector
             return '';
         }
 
-        $contents = file_get_contents($path);
+        // The read failure is handled below and re-reported with the path and
+        // what was being read, so PHP's own diagnostic adds nothing. Letting it
+        // through makes every run of the unreadable-file regression print a
+        // warning, and a suite that always says "there were issues" cannot
+        // report a real one.
+        $contents = @file_get_contents($path);
         if (!is_string($contents)) {
             throw new RuntimeException('Unable to read Session handoff content: ' . $path);
         }
@@ -99,7 +104,7 @@ final readonly class SessionHandoffProjector
 
         $latest = $checkpoints[count($checkpoints) - 1];
         foreach (glob($session->path . '/checkpoints/' . $latest['id'] . '-*.md') ?: [] as $path) {
-            $contents = file_get_contents($path);
+            $contents = @file_get_contents($path);
             if (!is_string($contents)) {
                 throw new RuntimeException('Unable to read Session handoff checkpoint: ' . $path);
             }
