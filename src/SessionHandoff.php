@@ -41,15 +41,16 @@ final readonly class SessionHandoff
     }
 
     /**
-     * Observations that recorded a non-passing result.
+     * Historical observations that recorded a non-passing result.
      *
-     * Kept separate because a failure is the single most expensive thing for a
-     * resuming agent to rediscover: without it the obvious next move is to
-     * re-run what already failed and reach the same wall.
+     * This is deliberately not a statement about current validation state. A
+     * later observation may supersede an earlier failure, and only a caller that
+     * also owns the current Contract revision and implementation snapshot can
+     * select current evidence.
      *
      * @return list<ValidationEvidence>
      */
-    public function failures(): array
+    public function recordedFailures(): array
     {
         return array_values(array_filter(
             $this->validation,
@@ -104,19 +105,20 @@ final readonly class SessionHandoff
         $lines = array_merge($lines, $this->prose('Next action', $this->nextAction));
         $lines = array_merge($lines, $this->prose('Latest checkpoint', $this->latestCheckpoint));
         $lines = array_merge($lines, $this->section('Decisions', $this->decisions));
-        $lines = array_merge($lines, $this->section('Assumptions still unvalidated', $this->assumptions));
+        $lines = array_merge($lines, $this->section('Assumptions', $this->assumptions));
 
         $validation = [];
         foreach ($this->validation as $evidence) {
             $validation[] = sprintf(
-                '`%s` - %s (exit %d, Contract revision %d)',
+                '`%s` - %s (exit %d, Contract revision %d, implementation %s)',
                 $evidence->command,
                 $evidence->status->value,
                 $evidence->exitCode,
                 $evidence->contractRevision,
+                $evidence->implementationSnapshot ?? 'unbound',
             );
         }
-        $lines = array_merge($lines, $this->section('Validation already run', $validation));
+        $lines = array_merge($lines, $this->section('Validation history', $validation));
 
         return implode("\n", $lines) . "\n";
     }
