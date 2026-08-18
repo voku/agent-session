@@ -146,22 +146,26 @@ final class ValidationEvidenceStore
      * The latest matching observation wins: re-running a command after fixing
      * it is the normal way an obligation gets met.
      *
-     * A null $implementationSnapshot asks only about the Contract revision.
-     * That is the honest reading for a caller that cannot compute
-     * implementation identity - not a wildcard that matches every snapshot.
+     * Exact-state selection deliberately requires an implementation snapshot.
+     * A caller that cannot compute current implementation identity cannot safely
+     * turn snapshot-bound evidence into a current PASS merely because the
+     * Contract revision still matches.
      *
      * @param list<string> $commands the obligations the caller must account for
      */
     public function select(
         Session $session,
         int $contractRevision,
-        ?string $implementationSnapshot,
+        string $implementationSnapshot,
         array $commands,
     ): ValidationEvidenceSelection {
         if ($contractRevision < 1) {
             throw new RuntimeException('Selecting validation evidence requires a positive Contract revision.');
         }
-        $implementationSnapshot = $this->snapshot($implementationSnapshot);
+        $implementationSnapshot = trim($implementationSnapshot);
+        if (preg_match('/^sha256:[a-f0-9]{64}$/', $implementationSnapshot) !== 1) {
+            throw new RuntimeException('Selecting validation evidence requires an implementation snapshot sha256:<64 lowercase hex> digest.');
+        }
 
         $all = $this->all($session);
         $current = [];
@@ -186,7 +190,7 @@ final class ValidationEvidenceStore
                 $forCommand,
                 static fn (ValidationEvidence $evidence): bool => $evidence->contractRevision === $contractRevision,
             ));
-            $bound = $implementationSnapshot === null ? $forRevision : array_values(array_filter(
+            $bound = array_values(array_filter(
                 $forRevision,
                 static fn (ValidationEvidence $evidence): bool => $evidence->implementationSnapshot === $implementationSnapshot,
             ));
