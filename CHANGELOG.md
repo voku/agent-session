@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an unexplained `dropped` is the one thing nobody can reconstruct after the
   Session is pruned.
 - `agent-session close <id> --reason TEXT` and `agent-session list --task ID`.
+- `ValidationEvidenceStore::select()` and `ValidationEvidenceSelection` answer
+  "is this obligation validated *for this exact state*?". The evidence file is
+  append-only and outlives both the Contract revision and the implementation
+  content an observation was recorded against, so every consumer re-applied the
+  same binding rule by hand. The selection reports the three ways the answer can
+  be no separately - never recorded, recorded against earlier implementation
+  content, recorded against an earlier Contract revision - because collapsing
+  them is what lets a superseded PASS read as current.
 
 ### Changed
 

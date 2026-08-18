@@ -134,6 +134,86 @@ final class ValidationEvidenceStore
         return $evidence;
     }
 
+    /**
+     * Select the observation that describes one exact implementation state.
+     *
+     * The evidence file is append-only and outlives both the Contract revision
+     * and the implementation content an observation was recorded against, so
+     * every caller that asks "is this command validated?" has to re-apply the
+     * same binding rule. Applying it here keeps one answer for one storage
+     * layout, and keeps "superseded" distinguishable from "never recorded".
+     *
+     * The latest matching observation wins: re-running a command after fixing
+     * it is the normal way an obligation gets met.
+     *
+     * A null $implementationSnapshot asks only about the Contract revision.
+     * That is the honest reading for a caller that cannot compute
+     * implementation identity - not a wildcard that matches every snapshot.
+     *
+     * @param list<string> $commands the obligations the caller must account for
+     */
+    public function select(
+        Session $session,
+        int $contractRevision,
+        ?string $implementationSnapshot,
+        array $commands,
+    ): ValidationEvidenceSelection {
+        if ($contractRevision < 1) {
+            throw new RuntimeException('Selecting validation evidence requires a positive Contract revision.');
+        }
+        $implementationSnapshot = $this->snapshot($implementationSnapshot);
+
+        $all = $this->all($session);
+        $current = [];
+        $supersededByImplementation = [];
+        $supersededByRevision = [];
+        $missing = [];
+
+        foreach ($commands as $rawCommand) {
+            $command = trim($rawCommand);
+            if ($command === '') {
+                throw new RuntimeException('Selecting validation evidence requires non-empty commands.');
+            }
+            if (array_key_exists($command, $current)) {
+                continue;
+            }
+
+            $forCommand = array_values(array_filter(
+                $all,
+                static fn (ValidationEvidence $evidence): bool => $evidence->command === $command,
+            ));
+            $forRevision = array_values(array_filter(
+                $forCommand,
+                static fn (ValidationEvidence $evidence): bool => $evidence->contractRevision === $contractRevision,
+            ));
+            $bound = $implementationSnapshot === null ? $forRevision : array_values(array_filter(
+                $forRevision,
+                static fn (ValidationEvidence $evidence): bool => $evidence->implementationSnapshot === $implementationSnapshot,
+            ));
+
+            $current[$command] = $bound === [] ? null : $bound[count($bound) - 1];
+            if ($bound !== []) {
+                continue;
+            }
+            if ($forRevision !== []) {
+                $supersededByImplementation[] = $command;
+            } elseif ($forCommand !== []) {
+                $supersededByRevision[] = $command;
+            } else {
+                $missing[] = $command;
+            }
+        }
+
+        return new ValidationEvidenceSelection(
+            $contractRevision,
+            $implementationSnapshot,
+            $current,
+            $supersededByImplementation,
+            $supersededByRevision,
+            $missing,
+        );
+    }
+
     private function assertPassingExitCode(ValidationStatus $status, int $exitCode): void
     {
         if ($status === ValidationStatus::PASSED && $exitCode !== 0) {

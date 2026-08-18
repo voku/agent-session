@@ -156,6 +156,40 @@ fresh working memory and `rehydrate()` for caller-authorized historical
 identity — reviving a finished Session would make a governed Run look live again
 without any owner having decided that it is.
 
+### Selecting validation evidence
+
+`validation-evidence.jsonl` is append-only, so it keeps observations recorded
+against earlier Contract revisions and earlier implementation content. Asking
+whether a command is validated is therefore a question about *binding*, not
+about presence:
+
+```php
+<?php
+
+use voku\AgentSession\ValidationEvidenceStore;
+
+$selection = (new ValidationEvidenceStore())->select(
+    $session,
+    $contractRevision,
+    $implementationSnapshot, // 'sha256:...', or null to bind on the revision alone
+    $contractValidationCommands,
+);
+
+$selection->isFullyObserved(); // every obligation has an observation for this exact state
+$selection->isPassing();       // ...and all of them passed
+$selection->stale();           // observations exist, but only for superseded state
+$selection->missing;           // never observed at all
+```
+
+`isFullyObserved()` deliberately says nothing about pass/fail: an honest
+recorded failure is a complete answer about the current state, which is what a
+status projection needs. A close gate asks `isPassing()`.
+
+The three negative answers stay apart — `missing`, `supersededByImplementation`,
+`supersededByRevision` — because "the code moved after this passed" and "this
+was never run" call for different actions, and collapsing them is exactly what
+lets a superseded PASS read as current.
+
 ### Embedding the CLI
 
 `Cli` writes to `php://output` and `php://stderr`, and accepts explicit streams:
