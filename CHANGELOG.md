@@ -10,42 +10,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `SessionStore::activeForTask()`, `openForTask()` and `allForTask()` own the
-  "one open Session per task" invariant. Every governed owner previously
-  re-derived it from `all()`, which is how one storage rule ended up with
-  several different failure behaviours: some callers threw, one silently
-  returned nothing, and one reported a count.
+  "one open Session per task" rule. `create()` and `rehydrate()` refuse to
+  allocate parallel open working memory for the same task, while the selection
+  APIs let reporting callers expose legacy or externally-corrupted ambiguity
+  instead of silently picking a winner.
 - `Session::$closedAt` / `$closedReason` and `SessionStore::close()` record
-  *why* working memory stopped being open. `dropped` is written both by a human
-  abandoning a task and by a governed owner whose newer approved Contract
-  revision superseded the Run a Session served; those are different facts, and
-  an unexplained `dropped` is the one thing nobody can reconstruct after the
-  Session is pruned.
+  *why* working memory stopped being open while that pruneable Session still
+  exists. Durable lifecycle provenance that must survive Session pruning remains
+  owned by the durable lifecycle package rather than leaking back into working
+  memory.
 - `agent-session close <id> --reason TEXT` and `agent-session list --task ID`.
 - `SessionHandoffProjector` / `SessionHandoff` and `agent-session handoff <id>
-  [--format md|json]` project a resume packet out of a Session's own working
-  memory: goal, next action, latest checkpoint, decisions, still-unvalidated
-  assumptions, and the validation already run - including what failed. An agent
-  resuming a Session otherwise spends its first budget re-deriving what the
-  previous one already knew, and redoes work whose only record is prose it
-  skimmed. The packet is derived on read, never stored, so working memory stays
-  pruneable and no second source of durable truth appears.
+  [--format md|json]` project a compact resume packet out of a Session's own
+  working memory: goal, next action, latest checkpoint, recorded decisions and
+  assumptions, plus validation history. The projection deliberately does not
+  infer which assumptions are still unvalidated or which historical validation
+  describes the current implementation. The packet is derived on read, never
+  stored, so working memory stays pruneable and no second source of durable
+  truth or lifecycle authority appears.
 - `ValidationEvidenceStore::select()` and `ValidationEvidenceSelection` answer
-  "is this obligation validated *for this exact state*?". The evidence file is
-  append-only and outlives both the Contract revision and the implementation
-  content an observation was recorded against, so every consumer re-applied the
-  same binding rule by hand. The selection reports the three ways the answer can
-  be no separately - never recorded, recorded against earlier implementation
-  content, recorded against an earlier Contract revision - because collapsing
-  them is what lets a superseded PASS read as current.
+  "is this obligation validated *for this exact state*?". Exact-state selection
+  requires both the Contract revision and implementation snapshot. Snapshotless
+  legacy observations remain readable but cannot satisfy a snapshot-bound
+  currentness question. The selection reports never-recorded, superseded
+  implementation, and superseded Contract revision separately instead of
+  allowing historical PASS evidence to read as current.
 
 ### Changed
 
-- A closed Session is terminal. `SessionStore::setStatus()` refuses to reopen it
-  or relabel it as the other closed status, and repeating the identical close is
-  idempotent. `create()` allocates fresh working memory and `rehydrate()`
-  restores caller-authorized historical identity; silently reviving a finished
-  Session would make a governed Run look live again without any owner deciding
-  that it is.
+- A closed Session **status** is terminal. `SessionStore::setStatus()` refuses to
+  reopen it or relabel it as the other closed status, and repeating the identical
+  close is idempotent. `create()` allocates fresh working memory and
+  `rehydrate()` restores caller-authorized historical identity, but both reject a
+  task that already has open working memory.
+- `SessionHandoff::recordedFailures()` exposes historical failed observations by
+  name instead of implying they are the current validation verdict. Markdown
+  output labels validation as history and carries Contract revision plus
+  implementation snapshot identity for every observation.
 - `Cli` writes to `php://output` / `php://stderr` instead of the `STDOUT` /
   `STDERR` constants, and accepts explicit streams. A PHP host embedding the CLI
   in-process can now capture or discard its output with ordinary output
