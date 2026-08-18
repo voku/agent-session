@@ -37,6 +37,7 @@ final class SessionStore
         if ($taskId === '') {
             throw new RuntimeException('A session requires a non-empty --task id.');
         }
+        $this->assertNoOpenSession($root, $taskId);
 
         return $this->createAtId(
             $root,
@@ -77,6 +78,7 @@ final class SessionStore
         if (file_exists($path) || is_link($path)) {
             throw new RuntimeException(sprintf('Cannot rehydrate existing Session: %s', $id));
         }
+        $this->assertNoOpenSession($root, $taskId);
 
         return $this->createAtId($root, $id, $taskId, $by, $baseCommit, $ephemeral);
     }
@@ -162,7 +164,7 @@ final class SessionStore
      *
      * Returned as a list rather than a single Session on purpose: a reporting
      * caller has to be able to say "two are open" instead of failing, which is
-     * the only honest thing to render for a state a human still has to resolve.
+     * the only honest thing to render for a pre-existing broken state.
      *
      * @return list<Session>
      */
@@ -177,9 +179,10 @@ final class SessionStore
     /**
      * The single open Session for one task, or null when none is open.
      *
-     * A task has at most one open working-memory Session. Owners resume that
-     * Session instead of allocating a parallel one, so more than one open
-     * Session is a state to report, not a set to pick from.
+     * New and rehydrated Sessions are rejected while another Session for the
+     * task remains open. More than one open Session can therefore only be a
+     * pre-existing or externally-corrupted state, which callers must report
+     * rather than resolve by picking a winner.
      *
      * @throws AmbiguousActiveSession when more than one Session is open
      */
@@ -221,9 +224,9 @@ final class SessionStore
     /**
      * Move a Session to another lifecycle status.
      *
-     * A closed Session is terminal. `create()` allocates fresh working memory
-     * and `rehydrate()` restores a caller-authorized historical identity, so
-     * re-opening a finished Session would only make a governed Run look live
+     * A closed Session status is terminal. `create()` allocates fresh working
+     * memory and `rehydrate()` restores caller-authorized historical identity,
+     * so re-opening a finished Session would only make a governed Run look live
      * again without any owner having decided that it is.
      */
     public function setStatus(Session $session, SessionStatus $status, ?string $reason = null): Session
@@ -277,10 +280,9 @@ final class SessionStore
     /**
      * Retire working memory with the reason it was retired.
      *
-     * `dropped` is written both by a human abandoning a task and by a governed
-     * owner whose newer approved revision superseded the Run this Session
-     * served. Those are different facts; recording which one happened keeps a
-     * pruned Session explainable from durable state alone.
+     * The reason explains the Session while that pruneable working memory still
+     * exists. Durable lifecycle owners remain responsible for recording any
+     * reason that must survive Session pruning.
      */
     public function close(Session $session, SessionStatus $status, ?string $reason = null): Session
     {
@@ -383,6 +385,22 @@ final class SessionStore
     public function pathFor(string $root, string $id): string
     {
         return rtrim($root, '/') . '/' . $id;
+    }
+
+    private function assertNoOpenSession(string $root, string $taskId): void
+    {
+        $open = $this->openForTask($root, $taskId);
+        if ($open === []) {
+            return;
+        }
+
+        throw new RuntimeException(sprintf(
+            'Task %s already has open Session%s %s; resume or close %s before allocating another.',
+            $taskId,
+            count($open) === 1 ? '' : 's',
+            implode(', ', array_map(static fn (Session $session): string => $session->id, $open)),
+            count($open) === 1 ? 'it' : 'them',
+        ));
     }
 
     private function createAtId(
