@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace voku\AgentSession\Tests;
 
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use voku\AgentSession\SessionHandoffProjector;
 use voku\AgentSession\SessionStatus;
 use voku\AgentSession\SessionStore;
@@ -99,6 +100,46 @@ final class SessionHandoffTest extends TestCase
         self::assertStringNotContainsString('Assumptions still unvalidated', $markdown);
         self::assertStringContainsString('## Validation history', $markdown);
         self::assertStringContainsString('`composer ci` - failed (exit 1, Contract revision 2, implementation unbound)', $markdown);
+    }
+
+    public function testAuthoredItalicMarkdownIsPreserved(): void
+    {
+        $store = new SessionStore();
+        $session = $store->create($this->root, 'TASK-A', 'italic');
+        file_put_contents($session->path . '/plan.md', <<<MD
+        # Plan: TASK-A
+
+        ## Goal
+
+        *Run the migration dry-run*
+
+        ## Next action
+
+        *Inspect the generated diff*
+
+        MD);
+
+        $handoff = (new SessionHandoffProjector())->project($session);
+
+        self::assertSame('*Run the migration dry-run*', $handoff->goal);
+        self::assertSame('*Inspect the generated diff*', $handoff->nextAction);
+    }
+
+    public function testExistingUnreadableWorkingMemoryFailsExplicitly(): void
+    {
+        $store = new SessionStore();
+        $session = $store->create($this->root, 'TASK-A', 'unreadable');
+        $path = $session->path . '/plan.md';
+        chmod($path, 0000);
+        if (is_readable($path)) {
+            chmod($path, 0644);
+            self::markTestSkipped('Runtime can still read mode-000 files.');
+        }
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Unable to read Session handoff content');
+
+        (new SessionHandoffProjector())->project($session);
     }
 
     public function testTheLatestCheckpointIsTheOneCarriedForward(): void
