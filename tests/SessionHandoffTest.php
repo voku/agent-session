@@ -41,18 +41,15 @@ final class SessionHandoffTest extends TestCase
         self::assertTrue($handoff->isResumable());
         self::assertSame('lars', $handoff->claimedBy);
         self::assertSame('abc123', $handoff->baseCommit);
-
-        // The scaffold's italic prompts are instructions to the agent, not content.
         self::assertNull($handoff->goal);
         self::assertNull($handoff->nextAction);
         self::assertNull($handoff->latestCheckpoint);
         self::assertSame([], $handoff->decisions);
         self::assertSame([], $handoff->assumptions);
-
         self::assertStringContainsString('*nothing recorded*', $handoff->toMarkdown());
     }
 
-    public function testFilledWorkingMemoryBecomesAResumePacket(): void
+    public function testFilledWorkingMemoryBecomesAResumePacketWithoutInventingAuthority(): void
     {
         $store = new SessionStore();
         $session = $store->create($this->root, 'TASK-A', 'filled', 'lars');
@@ -92,14 +89,16 @@ final class SessionHandoffTest extends TestCase
         self::assertSame(['Report callers tolerate an empty list'], $handoff->assumptions);
         self::assertStringContainsString('the report still needs updating', (string) $handoff->latestCheckpoint);
         self::assertCount(1, $handoff->checkpoints);
-
-        self::assertCount(1, $handoff->failures());
-        self::assertSame('composer ci', $handoff->failures()[0]->command);
+        self::assertCount(1, $handoff->recordedFailures());
+        self::assertSame('composer ci', $handoff->recordedFailures()[0]->command);
 
         $markdown = $handoff->toMarkdown();
         self::assertStringContainsString('## Next action', $markdown);
         self::assertStringContainsString('Replace the last `all()` call', $markdown);
-        self::assertStringContainsString('`composer ci` - failed (exit 1, Contract revision 2)', $markdown);
+        self::assertStringContainsString('## Assumptions', $markdown);
+        self::assertStringNotContainsString('Assumptions still unvalidated', $markdown);
+        self::assertStringContainsString('## Validation history', $markdown);
+        self::assertStringContainsString('`composer ci` - failed (exit 1, Contract revision 2, implementation unbound)', $markdown);
     }
 
     public function testTheLatestCheckpointIsTheOneCarriedForward(): void
