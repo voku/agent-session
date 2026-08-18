@@ -120,7 +120,9 @@ $session = (new SessionStore())->rehydrate(
 ### One open Session per task
 
 A task has at most one open working-memory Session. That rule belongs to this
-package, so hosts select instead of re-deriving it:
+package: `create()` and `rehydrate()` refuse to allocate parallel open working
+memory for the same task, while hosts use the owner APIs instead of re-deriving
+selection from `all()`:
 
 ```php
 <?php
@@ -130,38 +132,43 @@ use voku\AgentSession\SessionStore;
 
 $sessions = new SessionStore();
 
-$open = $sessions->openForTask($sessionsRoot, $taskId);   // report the real state
-$active = $sessions->activeForTask($sessionsRoot, $taskId); // pick exactly one, or null
+$open = $sessions->openForTask($sessionsRoot, $taskId);      // report the real state
+$active = $sessions->activeForTask($sessionsRoot, $taskId); // exactly one, or null
 ```
 
 `activeForTask()` throws `AmbiguousActiveSession` — carrying the task id and the
-offending Session ids — when more than one Session is open. A host that only
-renders state uses `openForTask()` and counts, because "two are open" is
-something a human has to resolve, not something the store may pick a winner for.
+offending Session ids — when legacy or externally modified state contains more
+than one open Session. A host that only renders state uses `openForTask()` and
+counts, because "two are open" is something a human has to resolve, not
+something the store may hide by picking a winner.
 
 ### Retiring working memory
 
-A Session that stops being open records **why**:
+A Session that stops being open can record **why** while that pruneable Session
+still exists:
 
 ```php
 $sessions->close($session, SessionStatus::DROPPED, 'superseded by approved Contract revision 2');
 ```
 
-`dropped` is written both by a human abandoning a task and by a governed owner
-whose newer approved Contract revision superseded the Run that Session served.
-Those are different facts. Recording the reason keeps a Session explainable
-after it is pruned, when only durable state remains.
+`dropped` may be written both by a human abandoning a task and by a governed
+owner whose newer approved Contract revision superseded the Run that Session
+served. Those are different facts, so the Session records the reason instead of
+trying to infer it later. The reason lives in `session.json` and disappears when
+the Session is pruned. Any lifecycle provenance that must survive pruning remains
+the responsibility of the durable owner, for example the governed Run history.
 
-A closed Session is terminal: it cannot be reopened or relabelled as the other
-closed status, and repeating the identical close is a no-op. Use `create()` for
-fresh working memory and `rehydrate()` for caller-authorized historical
-identity — reviving a finished Session would make a governed Run look live again
-without any owner having decided that it is.
+A closed Session **status** is terminal: it cannot be reopened or relabelled as
+the other closed status, and repeating the identical close is a no-op. Use
+`create()` for genuinely fresh working memory and `rehydrate()` for
+caller-authorized historical identity. Both refuse to create parallel open
+working memory for a task that already has an open Session.
 
 ### Resuming a session
 
 A fresh agent picking up an existing Session does not need the whole
-working-memory directory; it needs what the previous one already established:
+working-memory directory; it needs a compact projection of what the previous one
+recorded:
 
 ```bash
 agent-session handoff 2026-06-07-remove-session-access
@@ -170,20 +177,27 @@ agent-session handoff 2026-06-07-remove-session-access
 ```php
 $handoff = (new SessionHandoffProjector())->project($session);
 
-$handoff->nextAction;      // the single next concrete step, or null if none was recorded
+$handoff->nextAction;         // the recorded next concrete step, or null
 $handoff->latestCheckpoint;
-$handoff->decisions;       // titles; the reasoning stays in decisions.md
-$handoff->failures();      // validation that already failed - the costliest thing to rediscover
-$handoff->isResumable();   // false once the Session is closed, with closedReason saying why
+$handoff->decisions;          // titles; reasoning stays in decisions.md
+$handoff->assumptions;        // recorded assumptions, without claiming current validity
+$handoff->recordedFailures(); // historical failed observations, not a current-state verdict
+$handoff->isResumable();      // false once the Session status is closed
 ```
 
 The packet is **derived on read and never stored**. Working memory stays
-pruneable, and the handoff does not become a second source of durable truth.
+pruneable, and the handoff does not become a second source of durable truth or a
+new lifecycle authority.
 
-It also reports absence honestly. A section still holding its scaffold
-placeholder, or a plan the agent rewrote without the expected headings, is
-reported as empty rather than guessed at — handing on `*the single next concrete
-step*` as a next action would tell a resuming agent to invent one.
+Validation in the handoff is explicitly **history**. It carries each observation's
+Contract revision and implementation snapshot (or `unbound`), but it does not
+claim that an old PASS or failure describes the current implementation. Current
+validation is selected separately by an owner that knows the current Contract
+revision and implementation snapshot.
+
+The projector also reports absence honestly. A section still holding its
+scaffold placeholder, or a plan the agent rewrote without the expected headings,
+is reported as empty rather than guessed at.
 
 ### Selecting validation evidence
 
@@ -200,19 +214,25 @@ use voku\AgentSession\ValidationEvidenceStore;
 $selection = (new ValidationEvidenceStore())->select(
     $session,
     $contractRevision,
-    $implementationSnapshot, // 'sha256:...', or null to bind on the revision alone
+    $implementationSnapshot, // required: sha256:<64 lowercase hex>
     $contractValidationCommands,
 );
 
 $selection->isFullyObserved(); // every obligation has an observation for this exact state
-$selection->isPassing();       // ...and all of them passed
+$selection->isPassing();       // ...and all of those current observations passed
 $selection->stale();           // observations exist, but only for superseded state
 $selection->missing;           // never observed at all
 ```
 
+Exact-state selection requires the implementation snapshot. Snapshotless legacy
+observations may still be stored and read, but they cannot satisfy a
+snapshot-bound currentness question. A caller that cannot compute the current
+implementation identity cannot safely downgrade the question to revision-only
+and promote historical evidence to a current PASS.
+
 `isFullyObserved()` deliberately says nothing about pass/fail: an honest
-recorded failure is a complete answer about the current state, which is what a
-status projection needs. A close gate asks `isPassing()`.
+recorded failure is a complete answer about the current state. A close gate asks
+`isPassing()`.
 
 The three negative answers stay apart — `missing`, `supersededByImplementation`,
 `supersededByRevision` — because "the code moved after this passed" and "this
@@ -239,8 +259,8 @@ different active Session.
 
 That distinction is intentional:
 
-- `create()` allocates fresh pruneable working context;
-- `rehydrate()` restores caller-authorized historical identity;
+- `create()` allocates fresh pruneable working context and refuses a parallel open Session;
+- `rehydrate()` restores caller-authorized historical identity and refuses a parallel open Session;
 - Session state remains pruneable either way;
 - durable lifecycle identity remains owned outside this package.
 
