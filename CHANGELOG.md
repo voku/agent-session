@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restores caller-authorized historical identity; silently reviving a finished
   Session would make a governed Run look live again without any owner deciding
   that it is.
+- `Cli` writes to `php://output` / `php://stderr` instead of the `STDOUT` /
+  `STDERR` constants, and accepts explicit streams. A PHP host embedding the CLI
+  in-process can now capture or discard its output with ordinary output
+  buffering, instead of installing a stream filter to silence a library it
+  called itself.
 - `session.json` is schema `1.1`. The added fields are optional and `1.0`
   metadata still loads unchanged.
 

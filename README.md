@@ -156,6 +156,18 @@ fresh working memory and `rehydrate()` for caller-authorized historical
 identity — reviving a finished Session would make a governed Run look live again
 without any owner having decided that it is.
 
+### Embedding the CLI
+
+`Cli` writes to `php://output` and `php://stderr`, and accepts explicit streams:
+
+```php
+$cli = new Cli(out: $ownStream, err: $ownErrorStream);
+```
+
+A host assembling a structured response can therefore capture or discard CLI
+output with ordinary output buffering, instead of installing a stream filter to
+silence a library it called in-process.
+
 Use `create()` when a genuinely new Session is required. Use `rehydrate()` only
 when a durable owner already supplies the exact Session id to restore after
 working memory was pruned. Rehydration does not invent Task, Contract, Run, or

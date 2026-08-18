@@ -17,12 +17,41 @@ final class Cli
     private readonly SessionStore $store;
     private readonly ValidationEvidenceStore $validationEvidence;
 
+    /** @var resource */
+    private $out;
+
+    /** @var resource */
+    private $err;
+
+    /**
+     * Output goes to `php://output`, not to the `STDOUT` constant.
+     *
+     * A PHP host that embeds this CLI has to be able to capture or discard what
+     * it prints - a structured host response is corrupted by a stray progress
+     * line. Writing to the `STDOUT` constant bypasses the host's own output
+     * buffering, which leaves the host inventing stream filters to silence a
+     * library it already called in-process.
+     *
+     * @param resource|null $out
+     * @param resource|null $err
+     */
     public function __construct(
         ?SessionStore $store = null,
         ?ValidationEvidenceStore $validationEvidence = null,
+        $out = null,
+        $err = null,
     ) {
         $this->store = $store ?? new SessionStore();
         $this->validationEvidence = $validationEvidence ?? new ValidationEvidenceStore();
+
+        $resolvedOut = $out ?? fopen('php://output', 'wb');
+        $resolvedErr = $err ?? fopen('php://stderr', 'wb');
+        if (!is_resource($resolvedOut) || !is_resource($resolvedErr)) {
+            throw new \RuntimeException('Unable to open CLI output streams.');
+        }
+
+        $this->out = $resolvedOut;
+        $this->err = $resolvedErr;
     }
 
     /** @param list<string> $argv */
@@ -47,7 +76,7 @@ final class Cli
                 default => $this->unknownCommand($command),
             };
         } catch (Throwable $e) {
-            fwrite(STDERR, 'Error: ' . $e->getMessage() . "\n");
+            fwrite($this->err, 'Error: ' . $e->getMessage() . "\n");
 
             return 1;
         }
@@ -68,11 +97,11 @@ final class Cli
             $this->hasFlag($parsed['options'], 'ephemeral'),
         );
 
-        fwrite(STDOUT, sprintf("Started session: %s\n", $session->id));
-        fwrite(STDOUT, sprintf("- path: %s\n", $session->path));
-        fwrite(STDOUT, "- working-memory files: plan.md, assumptions.md, decisions.md, validation.md, checkpoints/\n");
+        fwrite($this->out, sprintf("Started session: %s\n", $session->id));
+        fwrite($this->out, sprintf("- path: %s\n", $session->path));
+        fwrite($this->out, "- working-memory files: plan.md, assumptions.md, decisions.md, validation.md, checkpoints/\n");
         if ($session->ephemeral) {
-            fwrite(STDOUT, "- ephemeral: repository-wide gates ignore this session; close it when the experiment is over\n");
+            fwrite($this->out, "- ephemeral: repository-wide gates ignore this session; close it when the experiment is over\n");
         }
 
         return 0;
@@ -104,7 +133,7 @@ final class Cli
         }
 
         $session = $this->store->claim($session, $by, $this->stringOption($parsed['options'], 'base-commit'));
-        fwrite(STDOUT, sprintf("Claimed session '%s' for '%s'.\n", $session->id, (string) $session->claimedBy));
+        fwrite($this->out, sprintf("Claimed session '%s' for '%s'.\n", $session->id, (string) $session->claimedBy));
 
         return 0;
     }
@@ -123,7 +152,7 @@ final class Cli
         );
 
         $last = $session->checkpoints[count($session->checkpoints) - 1] ?? null;
-        fwrite(STDOUT, sprintf("Recorded checkpoint %s on session '%s'.\n", $last['id'] ?? '?', $session->id));
+        fwrite($this->out, sprintf("Recorded checkpoint %s on session '%s'.\n", $last['id'] ?? '?', $session->id));
 
         return 0;
     }
@@ -143,7 +172,7 @@ final class Cli
             $this->stringOption($parsed['options'], 'body') ?? '',
         );
 
-        fwrite(STDOUT, sprintf("Recorded %s on session '%s'.\n", strtolower(trim($kind)), $session->id));
+        fwrite($this->out, sprintf("Recorded %s on session '%s'.\n", strtolower(trim($kind)), $session->id));
 
         return 0;
     }
@@ -162,7 +191,7 @@ final class Cli
         }
 
         $session = $this->store->close($session, $status, $this->stringOption($parsed['options'], 'reason'));
-        fwrite(STDOUT, sprintf(
+        fwrite($this->out, sprintf(
             "Closed session '%s' as %s%s.\n",
             $session->id,
             $session->status->value,
@@ -188,7 +217,7 @@ final class Cli
             if ($statusFilter !== null && $session->status !== $statusFilter) {
                 continue;
             }
-            fwrite(STDOUT, sprintf(
+            fwrite($this->out, sprintf(
                 "%-40s %-8s task=%s claimed_by=%s%s\n",
                 $session->id,
                 $session->status->value,
@@ -200,7 +229,7 @@ final class Cli
         }
 
         if ($shown === 0) {
-            fwrite(STDOUT, "No sessions found.\n");
+            fwrite($this->out, "No sessions found.\n");
         }
 
         return 0;
@@ -213,7 +242,7 @@ final class Cli
         $root = $this->resolveRoot($parsed['options']);
         $session = $this->store->load($root, $this->requireId($parsed['arguments']));
 
-        fwrite(STDOUT, json_encode($session->toArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n");
+        fwrite($this->out, json_encode($session->toArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n");
 
         return 0;
     }
@@ -223,7 +252,7 @@ final class Cli
     {
         $action = array_shift($tokens) ?? 'help';
         if (in_array($action, ['help', '--help', '-h'], true)) {
-            fwrite(STDOUT, "Usage: agent-session validation record <id> --contract-revision N --command COMMAND --status passed|failed --exit-code N [--duration-ms N] [--by ACTOR] [--note TEXT] [--implementation-snapshot sha256:DIGEST]\n");
+            fwrite($this->out, "Usage: agent-session validation record <id> --contract-revision N --command COMMAND --status passed|failed --exit-code N [--duration-ms N] [--by ACTOR] [--note TEXT] [--implementation-snapshot sha256:DIGEST]\n");
 
             return 0;
         }
@@ -251,7 +280,7 @@ final class Cli
             $this->stringOption($parsed['options'], 'note'),
             $this->stringOption($parsed['options'], 'implementation-snapshot'),
         );
-        fwrite(STDOUT, sprintf(
+        fwrite($this->out, sprintf(
             "Recorded %s validation evidence for Contract revision %d on session '%s'.\n",
             $evidence->status->value,
             $evidence->contractRevision,
@@ -276,9 +305,9 @@ final class Cli
 
         $removed = $this->store->prune($root, $keepDays, $statuses, $dryRun);
         $verb = $dryRun ? 'Would prune' : 'Pruned';
-        fwrite(STDOUT, sprintf("%s %d session(s) older than %d day(s).\n", $verb, count($removed), $keepDays));
+        fwrite($this->out, sprintf("%s %d session(s) older than %d day(s).\n", $verb, count($removed), $keepDays));
         foreach ($removed as $id) {
-            fwrite(STDOUT, '- ' . $id . "\n");
+            fwrite($this->out, '- ' . $id . "\n");
         }
 
         return 0;
@@ -301,7 +330,7 @@ final class Cli
 
     private function helpCommand(): int
     {
-        fwrite(STDOUT, <<<TXT
+        fwrite($this->out, <<<TXT
         agent-session - pruneable working memory for coding-agent Runs.
 
         Usage:
@@ -331,8 +360,8 @@ final class Cli
 
     private function unknownCommand(string $command): int
     {
-        fwrite(STDERR, 'Unknown command: ' . $command . "\n");
-        fwrite(STDERR, "Run 'agent-session help' to view usage.\n");
+        fwrite($this->err, 'Unknown command: ' . $command . "\n");
+        fwrite($this->err, "Run 'agent-session help' to view usage.\n");
 
         return 1;
     }

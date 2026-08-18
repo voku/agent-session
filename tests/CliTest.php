@@ -126,13 +126,16 @@ final class CliTest extends TestCase
         self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'retired', '--root', $this->root]));
         $id = $this->firstSessionId();
 
+        ob_start();
         self::assertSame(0, $this->invoke([
             'close', $id,
             '--status', 'dropped',
             '--reason', 'superseded by approved Contract revision 2',
             '--root', $this->root,
         ]));
+        $output = (string) ob_get_clean();
 
+        self::assertStringContainsString('superseded by approved Contract revision 2', $output);
         $session = (new SessionStore())->load($this->root, $id);
         self::assertSame(SessionStatus::DROPPED, $session->status);
         self::assertSame('superseded by approved Contract revision 2', $session->closedReason);
@@ -143,8 +146,10 @@ final class CliTest extends TestCase
         self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'terminal', '--root', $this->root]));
         $id = $this->firstSessionId();
 
+        ob_start();
         self::assertSame(0, $this->invoke(['close', $id, '--status', 'done', '--root', $this->root]));
         self::assertSame(1, $this->invoke(['close', $id, '--status', 'dropped', '--root', $this->root]));
+        ob_end_clean();
 
         self::assertSame(SessionStatus::DONE, (new SessionStore())->load($this->root, $id)->status);
     }
@@ -154,9 +159,45 @@ final class CliTest extends TestCase
         self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'one', '--root', $this->root]));
         self::assertSame(0, $this->invoke(['start', '--task', 'TASK-2', '--slug', 'two', '--root', $this->root]));
 
+        ob_start();
         self::assertSame(0, $this->invoke(['list', '--task', 'TASK-2', '--root', $this->root]));
-        self::assertCount(1, (new SessionStore())->allForTask($this->root, 'TASK-2'));
-        self::assertCount(1, (new SessionStore())->allForTask($this->root, 'TASK-1'));
+        $output = (string) ob_get_clean();
+
+        self::assertStringContainsString('task=TASK-2', $output);
+        self::assertStringNotContainsString('task=TASK-1', $output);
+    }
+
+    /**
+     * A PHP host embedding this CLI must be able to capture everything it
+     * prints. Writing to the `STDOUT` constant escapes host output buffering
+     * and corrupts a structured host response that is being assembled around
+     * the call.
+     */
+    public function testEmbeddingHostCanCaptureAllCliOutput(): void
+    {
+        ob_start();
+        $exit = $this->invoke(['start', '--task', 'TASK-1', '--slug', 'captured', '--root', $this->root]);
+        $captured = (string) ob_get_clean();
+
+        self::assertSame(0, $exit);
+        self::assertStringContainsString('Started session:', $captured);
+    }
+
+    public function testEmbeddingHostCanRedirectCliOutputToItsOwnStream(): void
+    {
+        $out = fopen('php://memory', 'w+b');
+        $err = fopen('php://memory', 'w+b');
+        self::assertIsResource($out);
+        self::assertIsResource($err);
+
+        $cli = new Cli(null, null, $out, $err);
+        self::assertSame(0, $cli->run(['agent-session', 'start', '--task', 'TASK-1', '--slug', 'piped', '--root', $this->root]));
+        self::assertSame(1, $cli->run(['agent-session', 'show', 'no-such-session', '--root', $this->root]));
+
+        rewind($out);
+        rewind($err);
+        self::assertStringContainsString('Started session:', (string) stream_get_contents($out));
+        self::assertStringContainsString('Session not found: no-such-session', (string) stream_get_contents($err));
     }
 
     private function invoke(array $args): int
