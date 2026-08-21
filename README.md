@@ -88,9 +88,17 @@ session_plan/ -> .agent-loop/sessions/
 
 Or keep using the old location by passing `--root session_plan` explicitly.
 
-For the governed lifecycle, use `agent-loop workflow plan`, `approve`, `learn`,
-and `close`. The standalone Session CLI deliberately exposes only pruneable
-working-memory operations and validation observations.
+For the governed lifecycle, enter through `agent-loop enter <task-id>` and
+reconcile deterministic close-out through `agent-loop finish <task-id>`. Follow
+the returned canonical next action instead of scripting `workflow plan`,
+`approve`, `learn`, and `close` as a second phase machine. The standalone
+Session CLI deliberately exposes only pruneable working-memory operations and
+validation observations.
+
+The `agent-loop session …` and `agent-loop workflow …` namespaces are
+lower-level owner and orchestration surfaces that the lifecycle may return as a
+canonical next action; they are not alternative governed lifecycle entry
+points.
 
 ## PHP host integration
 
