@@ -88,9 +88,12 @@ session_plan/ -> .agent-loop/sessions/
 
 Or keep using the old location by passing `--root session_plan` explicitly.
 
-For the governed lifecycle, use `agent-loop workflow plan`, `approve`, `learn`,
-and `close`. The standalone Session CLI deliberately exposes only pruneable
-working-memory operations and validation observations.
+For the governed lifecycle, enter through `agent-loop enter <task-id>` and
+reconcile deterministic close-out through `agent-loop finish <task-id>`. Follow
+the returned canonical next action instead of scripting `workflow plan`,
+`approve`, `learn`, and `close` as a second phase machine. The standalone
+Session CLI deliberately exposes only pruneable working-memory operations and
+validation observations.
 
 ## PHP host integration
 
@@ -165,7 +168,7 @@ $sessions->close($session, SessionStatus::DROPPED, 'superseded by approved Contr
 ```
 
 `dropped` may be written both by a human abandoning a task and by a governed
-owner whose newer approved Contract revision superseded the Run that Session
+owner whose newer approved Contract revision superseded the Run a Session
 served. Those are different facts, so the Session records the reason instead of
 trying to infer it later. The reason lives in `session.json` and disappears when
 the Session is pruned. Any lifecycle provenance that must survive pruning remains
