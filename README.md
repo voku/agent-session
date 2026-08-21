@@ -95,6 +95,11 @@ the returned canonical next action instead of scripting `workflow plan`,
 Session CLI deliberately exposes only pruneable working-memory operations and
 validation observations.
 
+The `agent-loop session …` and `agent-loop workflow …` namespaces are
+lower-level owner and orchestration surfaces that the lifecycle may return as a
+canonical next action; they are not alternative governed lifecycle entry
+points.
+
 ## PHP host integration
 
 Lifecycle/orchestration packages should use `SessionStore` directly instead of
