@@ -168,7 +168,7 @@ $sessions->close($session, SessionStatus::DROPPED, 'superseded by approved Contr
 ```
 
 `dropped` may be written both by a human abandoning a task and by a governed
-owner whose newer approved Contract revision superseded the Run a Session
+owner whose newer approved Contract revision superseded the Run that Session
 served. Those are different facts, so the Session records the reason instead of
 trying to infer it later. The reason lives in `session.json` and disappears when
 the Session is pruned. Any lifecycle provenance that must survive pruning remains
