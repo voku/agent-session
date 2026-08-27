@@ -143,6 +143,7 @@ final class Cli
     private function checkpointCommand(array $tokens): int
     {
         $parsed = $this->parseOptions($tokens);
+        $this->assertOnlyOptions($parsed['options'], ['root', 'title', 'body']);
         $root = $this->resolveRoot($parsed['options']);
         $session = $this->store->load($root, $this->requireId($parsed['arguments']));
 
@@ -357,6 +358,7 @@ final class Cli
 
         Usage:
           agent-session <command> [options]
+          Value-taking long options accept both --name=value and --name value.
 
         Commands:
           start       Start a session.   --task ID [--by ACTOR] [--base-commit SHA] [--slug S] [--ephemeral]
@@ -426,7 +428,11 @@ final class Cli
             if (str_starts_with($token, '--')) {
                 $name = substr($token, 2);
                 $value = '';
-                if ($i + 1 < $count && !str_starts_with($tokens[$i + 1], '--')) {
+                $equalsPosition = strpos($name, '=');
+                if ($equalsPosition !== false) {
+                    $value = substr($name, $equalsPosition + 1);
+                    $name = substr($name, 0, $equalsPosition);
+                } elseif ($i + 1 < $count && !str_starts_with($tokens[$i + 1], '--')) {
                     $value = $tokens[$i + 1];
                     ++$i;
                 }
