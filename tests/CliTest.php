@@ -60,7 +60,12 @@ final class CliTest extends TestCase
         $checkpoint = $session->checkpoints[count($session->checkpoints) - 1] ?? null;
         self::assertIsArray($checkpoint);
         self::assertSame('review blindspots', $checkpoint['title']);
-        self::assertSame('Equals-form values are parsed instead of disappearing.', $checkpoint['body']);
+        $checkpointFiles = glob($session->path . '/checkpoints/001-*.md');
+        self::assertIsArray($checkpointFiles);
+        self::assertCount(1, $checkpointFiles);
+        $checkpointBody = file_get_contents($checkpointFiles[0]);
+        self::assertIsString($checkpointBody);
+        self::assertStringContainsString('Equals-form values are parsed instead of disappearing.', $checkpointBody);
         $checkpointCount = count($session->checkpoints);
 
         self::assertSame(1, $this->invoke([
