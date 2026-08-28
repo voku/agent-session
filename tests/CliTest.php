@@ -38,6 +38,45 @@ final class CliTest extends TestCase
         self::assertSame(SessionStatus::DONE, $store->load($this->root, $id)->status);
     }
 
+    public function testValueTakingLongOptionsAcceptEqualsFormWithoutWeakeningCheckpointOptionValidation(): void
+    {
+        self::assertSame(0, $this->invoke([
+            'start',
+            '--task=TASK-1',
+            '--slug=equals-form',
+            '--root=' . $this->root,
+        ]));
+        $id = $this->firstSessionId();
+        $store = new SessionStore();
+
+        self::assertSame(0, $this->invoke([
+            'checkpoint', $id,
+            '--title=review blindspots',
+            '--body=Equals-form values are parsed instead of disappearing.',
+            '--root=' . $this->root,
+        ]));
+
+        $session = $store->load($this->root, $id);
+        $checkpoint = $session->checkpoints[count($session->checkpoints) - 1] ?? null;
+        self::assertIsArray($checkpoint);
+        self::assertSame('review blindspots', $checkpoint['title']);
+        $checkpointFiles = glob($session->path . '/checkpoints/001-*.md');
+        self::assertIsArray($checkpointFiles);
+        self::assertCount(1, $checkpointFiles);
+        $checkpointBody = file_get_contents($checkpointFiles[0]);
+        self::assertIsString($checkpointBody);
+        self::assertStringContainsString('Equals-form values are parsed instead of disappearing.', $checkpointBody);
+        $checkpointCount = count($session->checkpoints);
+
+        self::assertSame(1, $this->invoke([
+            'checkpoint', $id,
+            '--title=must not be written',
+            '--unknown=value',
+            '--root=' . $this->root,
+        ]));
+        self::assertCount($checkpointCount, $store->load($this->root, $id)->checkpoints);
+    }
+
     public function testPublicCliDefaultsToCompactSessionRoot(): void
     {
         $projectRoot = $this->root . '/project';
