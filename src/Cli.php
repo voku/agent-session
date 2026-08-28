@@ -68,6 +68,7 @@ final class Cli
                 'checkpoint' => $this->checkpointCommand($tokens),
                 'record' => $this->recordCommand($tokens),
                 'close' => $this->closeCommand($tokens),
+                'reopen' => $this->reopenCommand($tokens),
                 'list' => $this->listCommand($tokens),
                 'show' => $this->showCommand($tokens),
                 'handoff' => $this->handoffCommand($tokens),
@@ -198,6 +199,24 @@ final class Cli
             $session->status->value,
             $session->closedReason === null ? '' : ' (' . $session->closedReason . ')',
         ));
+
+        return 0;
+    }
+
+    /** @param list<string> $tokens */
+    private function reopenCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->resolveRoot($parsed['options']);
+        $session = $this->store->load($root, $this->requireId($parsed['arguments']));
+
+        $reason = $this->stringOption($parsed['options'], 'reason') ?? '';
+        if (trim($reason) === '') {
+            throw new \InvalidArgumentException('reopen requires --reason explaining why the closed Session continues.');
+        }
+
+        $session = $this->store->reopen($session, $reason);
+        fwrite($this->out, sprintf("Reopened session '%s' (%s).\n", $session->id, $reason));
 
         return 0;
     }
@@ -364,6 +383,7 @@ final class Cli
           checkpoint  Add a checkpoint.  <id> --title T [--body TEXT]
           record      Add a record.      <id> --kind decision|assumption --title T [--body TEXT]
           close       Close a session.   <id> --status done|dropped [--reason TEXT]
+          reopen      Reopen a session.  <id> --reason TEXT (only a Session closed as done)
           list        List sessions.     [--status STATUS] [--task ID]
           show        Show metadata.     <id>
           handoff     Resume packet.     <id> [--format md|json]

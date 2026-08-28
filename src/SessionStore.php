@@ -315,6 +315,71 @@ final class SessionStore
     }
 
     /**
+     * Reopen a Session that was closed as done, so a governed Run bound to it stays workable.
+     *
+     * A Run binds to exactly one Session id. `close()` is the normal end of that Session, but work
+     * can legitimately continue afterwards - the closing Run's own review gate can demand a follow-up
+     * change, for example. Without this transition the Run is sealed: its bound Session can no longer
+     * become active, and a freshly started Session carries a different id that the Run does not accept.
+     *
+     * Deliberately narrow:
+     * - only a Session closed as `done` reopens; `dropped` states a Session was abandoned, and that
+     *   verdict is not silently reversible.
+     * - the task must have no other open Session, so reopening cannot create a second one.
+     * - a reason is required and recorded as a checkpoint, so the reopen stays auditable after the
+     *   `closed_reason` field is cleared.
+     */
+    public function reopen(Session $session, string $reason): Session
+    {
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw new RuntimeException('Reopening a Session requires a non-empty reason.');
+        }
+
+        $root = $this->rootFor($session);
+        $lock = $this->lockRoot($root);
+        try {
+            $current = $this->load($root, $session->id);
+
+            if ($current->status === SessionStatus::ACTIVE) {
+                return $current;
+            }
+
+            if ($current->status !== SessionStatus::DONE) {
+                throw new RuntimeException(sprintf(
+                    'Session %s is %s and cannot be reopened; only a Session closed as done reopens.',
+                    $current->id,
+                    $current->status->value,
+                ));
+            }
+
+            $this->assertNoOpenSession($root, $current->taskId, $current->ephemeral);
+
+            $updated = new Session(
+                $current->id,
+                $current->taskId,
+                SessionStatus::ACTIVE,
+                $current->claimedBy,
+                $current->claimedAt,
+                $current->baseCommit,
+                $current->createdAt,
+                $this->now(),
+                $current->checkpoints,
+                $current->path,
+                $current->ephemeral,
+                null,
+                null,
+            );
+            $this->writeMetadata($updated);
+        } finally {
+            $this->unlockRoot($lock);
+        }
+
+        // INFO: outside the store lock, because addCheckpoint() takes it again.
+        return $this->addCheckpoint($updated, 'Session reopened', $reason);
+    }
+
+    /**
      * Retire working memory with the reason it was retired.
      *
      * The reason explains the Session while that pruneable working memory still

@@ -153,6 +153,32 @@ final class CliTest extends TestCase
         self::assertSame(SessionStatus::DONE, (new SessionStore())->load($this->root, $id)->status);
     }
 
+    public function testReopenBringsADoneSessionBackToActive(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'resumed', '--root', $this->root]));
+        $id = $this->firstSessionId();
+
+        ob_start();
+        self::assertSame(0, $this->invoke(['close', $id, '--status', 'done', '--root', $this->root]));
+        self::assertSame(0, $this->invoke(['reopen', $id, '--reason', 'follow-up change after finish', '--root', $this->root]));
+        ob_end_clean();
+
+        self::assertSame(SessionStatus::ACTIVE, (new SessionStore())->load($this->root, $id)->status);
+    }
+
+    public function testReopenRequiresAReason(): void
+    {
+        self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'noreason', '--root', $this->root]));
+        $id = $this->firstSessionId();
+
+        ob_start();
+        self::assertSame(0, $this->invoke(['close', $id, '--status', 'done', '--root', $this->root]));
+        self::assertSame(1, $this->invoke(['reopen', $id, '--root', $this->root]));
+        ob_end_clean();
+
+        self::assertSame(SessionStatus::DONE, (new SessionStore())->load($this->root, $id)->status);
+    }
+
     public function testListCanBeScopedToOneTask(): void
     {
         self::assertSame(0, $this->invoke(['start', '--task', 'TASK-1', '--slug', 'one', '--root', $this->root]));

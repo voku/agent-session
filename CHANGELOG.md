@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- `SessionStore::reopen()` and `agent-session reopen <id> --reason TEXT` bring a
+  Session closed as `done` back to `active`. A governed Run binds to exactly one
+  Session id, so without this transition the Run was sealed by its own close: work
+  that legitimately continues afterwards - for example a follow-up change demanded
+  by the closing Run's review gate - could neither reuse the bound Session (closed)
+  nor a freshly started one (different id). The transition is deliberately narrow:
+  only `done` reopens (`dropped` states an abandoned Session and stays final), the
+  task must have no other open Session, and the required reason is recorded as a
+  `Session reopened` checkpoint so it survives the cleared `closed_reason` field.
+
 ## 0.6.2 - 2026-08-21
 
 ### Added

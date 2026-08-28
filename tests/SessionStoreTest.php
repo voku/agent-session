@@ -24,6 +24,69 @@ final class SessionStoreTest extends TestCase
         $this->removeDirectory($this->root);
     }
 
+    public function testReopenMakesADoneSessionWorkableAgainForItsBoundRun(): void
+    {
+        $store = new SessionStore();
+        $session = $store->create($this->root, 'ITPNG-426', null, 'claude', null);
+        $closed = $store->close($session, SessionStatus::DONE, 'first finish');
+
+        self::assertSame(SessionStatus::DONE, $closed->status);
+
+        $reopened = $store->reopen($closed, 'review gate demanded a follow-up change after finish');
+
+        self::assertSame(SessionStatus::ACTIVE, $reopened->status);
+        self::assertSame($session->id, $reopened->id, 'the Run binds to this exact id, so it must not change');
+        self::assertNull($reopened->closedAt);
+        self::assertNull($reopened->closedReason);
+
+        // the reason survives as an audit trail even though closed_reason is cleared
+        $titles = array_map(static fn (array $checkpoint): string => $checkpoint['title'], $reopened->checkpoints);
+        self::assertContains('Session reopened', $titles);
+    }
+
+    public function testReopenRefusesADroppedSession(): void
+    {
+        $store = new SessionStore();
+        $session = $store->create($this->root, 'ITPNG-426', null, 'claude', null);
+        $dropped = $store->close($session, SessionStatus::DROPPED, 'abandoned');
+
+        $this->expectExceptionMessage('cannot be reopened');
+        $store->reopen($dropped, 'changed my mind');
+    }
+
+    public function testReopenRefusesAnEmptyReason(): void
+    {
+        $store = new SessionStore();
+        $session = $store->create($this->root, 'ITPNG-426', null, 'claude', null);
+        $closed = $store->close($session, SessionStatus::DONE, 'first finish');
+
+        $this->expectExceptionMessage('requires a non-empty reason');
+        $store->reopen($closed, '   ');
+    }
+
+    public function testReopenRefusesWhenTheTaskAlreadyHasAnotherOpenSession(): void
+    {
+        $store = new SessionStore();
+        $first = $store->create($this->root, 'ITPNG-426', null, 'claude', null);
+        $closed = $store->close($first, SessionStatus::DONE, 'first finish');
+        $store->create($this->root, 'ITPNG-426', 'successor', 'claude', null);
+
+        // reopening must never leave the task with two open Sessions
+        $this->expectExceptionMessage('already has open Session');
+        $store->reopen($closed, 'follow-up work');
+    }
+
+    public function testReopenIsIdempotentOnAnAlreadyActiveSession(): void
+    {
+        $store = new SessionStore();
+        $session = $store->create($this->root, 'ITPNG-426', null, 'claude', null);
+
+        $reopened = $store->reopen($session, 'no-op');
+
+        self::assertSame(SessionStatus::ACTIVE, $reopened->status);
+        self::assertSame([], $reopened->checkpoints, 'a no-op reopen must not add an audit checkpoint');
+    }
+
     public function testCreateScaffoldsFilesAndMetadata(): void
     {
         $store = new SessionStore();
