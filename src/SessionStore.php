@@ -114,6 +114,7 @@ final class SessionStore
             throw new RuntimeException('Unable to read Session metadata: ' . $metadataPath);
         }
         $data = $this->decode($contents, $metadataPath);
+        $this->assertSupportedMetadataVersion($data, $metadataPath);
 
         $status = SessionStatus::tryFromString($this->stringField($data, 'status') ?? 'active') ?? SessionStatus::ACTIVE;
 
@@ -685,6 +686,15 @@ final class SessionStore
         }
 
         return $typed;
+    }
+
+    /** @param array<string, mixed> $data */
+    private function assertSupportedMetadataVersion(array $data, string $path): void
+    {
+        $version = $data['schema_version'] ?? null;
+        if (!is_string($version) || !in_array($version, ['1.0', '1.1'], true)) {
+            throw new UnsupportedSessionMetadataVersion($path, $version);
+        }
     }
 
     /** @param array<string, mixed> $data */
