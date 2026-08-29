@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.6.4 - 2026-08-29
+
+### Fixed
+
+- `SessionStore::load()` now enforces the `session.json` schema boundary that
+  Session metadata already publishes. Schema `1.0` and `1.1` are read
+  explicitly; missing, malformed, future, or otherwise unsupported versions
+  fail closed with `UnsupportedSessionMetadataVersion` instead of being
+  reinterpreted through current field defaults. A normal owner mutation of a
+  supported `1.0` Session rewrites it through the current `1.1` shape without
+  changing Session or task identity, while pruned working memory still uses
+  exact-ID `rehydrate()` rather than migration machinery.
+
 ## 0.6.3 - 2026-08-28
 
 ### Added
