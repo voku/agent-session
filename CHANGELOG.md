@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- `PackageResources` is the single owner of package-shipped resource locations,
+  matching `agent-loop`, `agent-map`, `agent-learning`, and
+  `agent-recall-compiler`. Hosts that projected assets by spelling
+  `vendor/voku/agent-session/...` themselves can ask for `SKILLS` /
+  `skillsRoot()` instead, so a future layout change stays a fact of this package.
+- `resources/skills/agent-session-maintainer/SKILL.md` ships the maintainer
+  guidance for agents changing this package: dependency direction, the
+  invariants a change has to preserve, and the declared validation gate.
+- `docs/` now holds the CLI reference (`docs/cli.md`) and the typed host
+  integration contract (`docs/php-api.md`), indexed by `docs/README.md`. The
+  README keeps the overview, requirements, install, and a quick start.
+- `UPGRADING.md` records breaking changes, starting with the
+  `session_plan/` -> `.agent-loop/sessions/` sessions-root move that was
+  previously documented only inside the README.
+- A `Makefile` exposes the same `install` / `test` / `phpstan` / `ci` entry
+  points the sibling packages use.
+- CI gained an `installed-consumer` job that installs the package into a clean
+  Composer consumer and a `dist-hygiene` job that checks the released
+  `git archive` ships `resources/skills` while excluding tests, `phpunit.xml`,
+  `phpstan.neon.dist`, and the `Makefile`. A Composer path repository copies the
+  directory verbatim, so export-ignore can only be verified against a real
+  archive.
+
+### Changed
+
+- `.gitattributes` marks development-only surfaces `export-ignore`, so released
+  archives no longer ship `.github/`, `tests/`, `phpunit.xml`,
+  `phpstan.neon.dist`, or the `Makefile`.
+
 ## 0.6.4 - 2026-08-29
 
 ### Fixed
