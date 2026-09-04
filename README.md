@@ -1,5 +1,14 @@
 # Agent Session (`voku/agent-session`)
 
+[![Build Status](https://github.com/voku/agent-session/actions/workflows/ci.yml/badge.svg)](https://github.com/voku/agent-session/actions)
+[![Latest Stable Version](https://poser.pugx.org/voku/agent-session/v/stable)](https://packagist.org/packages/voku/agent-session)
+[![Total Downloads](https://poser.pugx.org/voku/agent-session/downloads)](https://packagist.org/packages/voku/agent-session)
+[![Monthly Downloads](https://poser.pugx.org/voku/agent-session/d/monthly)](https://packagist.org/packages/voku/agent-session)
+[![License](https://poser.pugx.org/voku/agent-session/license)](https://packagist.org/packages/voku/agent-session)
+[![PHP Version Require](https://poser.pugx.org/voku/agent-session/require/php)](https://packagist.org/packages/voku/agent-session)
+[![GitHub Stars](https://img.shields.io/github/stars/voku/agent-session?style=flat-square)](https://github.com/voku/agent-session/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/voku/agent-session?style=flat-square)](https://github.com/voku/agent-session/network/members)
+
 The **working-memory** layer of the governed agentic-coding loop.
 
 A *task* is durable intent. A *session* is the temporary, mutable context an agent

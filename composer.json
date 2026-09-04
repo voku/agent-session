@@ -8,10 +8,27 @@
     "issues": "https://github.com/voku/agent-session/issues",
     "source": "https://github.com/voku/agent-session"
   },
+  "keywords": [
+    "agent",
+    "coding-agent",
+    "session",
+    "working-memory",
+    "checkpoints",
+    "decisions",
+    "assumptions",
+    "ai",
+    "llm"
+  ],
   "authors": [
     {
       "name": "Lars Moelleken",
       "homepage": "https://github.com/voku"
+    }
+  ],
+  "funding": [
+    {
+      "type": "github",
+      "url": "https://github.com/voku"
     }
   ],
   "require": {
