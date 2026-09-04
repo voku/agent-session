@@ -19,3 +19,68 @@ jobs:
           tools: composer:v2
       - run: composer install --no-interaction --prefer-dist
       - run: composer ci
+
+  installed-consumer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+      - name: Install package into a clean copied consumer
+        shell: bash
+        run: |
+          set -euo pipefail
+          consumer="$(mktemp -d)"
+          cd "$consumer"
+          cat > composer.json <<JSON
+          {
+            "name": "agent-session/installed-consumer",
+            "minimum-stability": "dev",
+            "prefer-stable": true,
+            "repositories": [
+              {
+                "type": "path",
+                "url": "$GITHUB_WORKSPACE",
+                "options": {"symlink": false}
+              }
+            ],
+            "require": {
+              "voku/agent-session": "@dev"
+            }
+          }
+          JSON
+          composer update --no-interaction --prefer-dist
+          test -d vendor/voku/agent-session
+          test ! -L vendor/voku/agent-session
+          test -x vendor/bin/agent-session
+          vendor/bin/agent-session list --root "$(mktemp -d)"
+          # agent-loop projects this skill out of the installed package
+          test -f vendor/voku/agent-session/resources/skills/agent-session-maintainer/SKILL.md
+
+  dist-hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify the released archive ships runtime assets and no dev surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          # a Composer path repository copies the directory verbatim, so
+          # export-ignore can only be verified against a real git archive
+          git archive HEAD > /tmp/agent-session-dist.tar
+          entries="$(tar -tf /tmp/agent-session-dist.tar)"
+          check_present() {
+            grep -Fqx "$1" <<< "$entries" || { echo "missing from dist: $1" >&2; exit 1; }
+          }
+          check_absent() {
+            if grep -Fq "$1" <<< "$entries"; then echo "should not ship: $1" >&2; exit 1; fi
+          }
+          check_present 'src/PackageResources.php'
+          check_present 'resources/skills/agent-session-maintainer/SKILL.md'
+          check_absent 'tests/'
+          check_absent 'phpunit.xml'
+          check_absent 'phpstan.neon.dist'
+          check_absent 'Makefile'
