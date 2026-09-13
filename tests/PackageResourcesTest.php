@@ -7,39 +7,32 @@ namespace voku\AgentSession\Tests;
 use PHPUnit\Framework\TestCase;
 use voku\AgentSession\PackageResources;
 
+/** @internal */
 final class PackageResourcesTest extends TestCase
 {
-    public function testPackageResourcesResolvesShippedSkills(): void
+    public function testSkillsRootExists(): void
     {
-        self::assertSame('resources/skills', PackageResources::SKILLS);
         self::assertDirectoryExists(PackageResources::skillsRoot());
     }
 
-    public function testMaintainerSkillIsShipped(): void
+    public function testConsumerSkillsIsEmpty(): void
     {
-        self::assertFileExists(PackageResources::skillsRoot() . '/agent-session-maintainer/SKILL.md');
+        self::assertSame([], PackageResources::consumerSkills());
     }
 
-    /**
-     * A host projecting these skills reads `SKILL.md` from every direct child
-     * directory, so a shipped entry without one would be projected as an empty
-     * skill instead of failing loudly.
-     */
-    public function testEverySkillDirectoryShipsASkillFile(): void
+    public function testMaintainerSkillsExistAndHaveSkillMd(): void
     {
-        $root = PackageResources::skillsRoot();
+        $skills = PackageResources::maintainerSkills();
+        self::assertArrayHasKey('agent-session-maintainer', $skills);
 
-        $entries = array_values(array_filter(
-            (array) scandir($root),
-            static fn (mixed $entry): bool => is_string($entry)
-                && !str_starts_with($entry, '.')
-                && is_dir($root . '/' . $entry),
-        ));
-
-        self::assertNotSame([], $entries, 'The package must ship at least one skill.');
-
-        foreach ($entries as $entry) {
-            self::assertFileExists($root . '/' . $entry . '/SKILL.md');
+        foreach ($skills as $id => $path) {
+            self::assertDirectoryExists($path, "Skill directory for {$id} must exist.");
+            self::assertFileExists($path . '/SKILL.md', "SKILL.md for {$id} must exist.");
         }
+    }
+
+    public function testConsumerInstructionFragmentReturnsNull(): void
+    {
+        self::assertNull(PackageResources::consumerInstructionFragment());
     }
 }

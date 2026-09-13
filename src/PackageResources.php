@@ -15,4 +15,29 @@ final class PackageResources
     {
         return dirname(__DIR__) . '/' . self::SKILLS;
     }
+
+    /**
+     * @return array<string, string> skill-id => absolute directory path
+     */
+    public static function consumerSkills(): array
+    {
+        return [];
+    }
+
+    /**
+     * @return array<string, string> skill-id => absolute directory path
+     */
+    public static function maintainerSkills(): array
+    {
+        return [
+            'agent-session-maintainer' => self::skillsRoot() . '/agent-session-maintainer',
+        ];
+    }
+
+    public static function consumerInstructionFragment(): ?string
+    {
+        $path = dirname(__DIR__) . '/resources/instructions/consumer.md';
+
+        return is_file($path) ? $path : null;
+    }
 }

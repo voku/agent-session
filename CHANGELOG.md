@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## 0.7.0 - 2026-09-04
+## 0.7.1 - 2026-09-13
+
+### Added
+
+- Add typed consumer and maintainer resource scoping to `PackageResources`: `consumerSkills()` returns an empty array, and `maintainerSkills()` explicitly classifies `agent-session-maintainer` as an owner repository skill.
+
 
 ### Added
 
