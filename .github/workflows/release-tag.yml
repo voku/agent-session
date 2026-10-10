@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.release/*.json'
+      - '.github/workflows/release-tag.yml'
 
 permissions:
   contents: write
@@ -44,10 +45,6 @@ jobs:
               echo "Invalid release target SHA: $target" >&2
               exit 1
             fi
-            if ! grep -Fq "## [$version] - " CHANGELOG.md && ! grep -Fq "## $version - " CHANGELOG.md; then
-              echo "CHANGELOG.md has no release section for $version" >&2
-              exit 1
-            fi
             git cat-file -e "${target}^{commit}"
             if ! git merge-base --is-ancestor "$target" "$frozen_main"; then
               echo "Release target $target is not reachable from frozen main $frozen_main" >&2
@@ -57,6 +54,10 @@ jobs:
               existing="$(git rev-list -n 1 "$version")"
               [[ "$existing" == "$target" ]] || { echo "Tag $version exists at $existing, expected $target" >&2; exit 1; }
               continue
+            fi
+            if ! grep -Fq "## [$version] - " CHANGELOG.md && ! grep -Fq "## $version - " CHANGELOG.md; then
+              echo "CHANGELOG.md has no release section for $version" >&2
+              exit 1
             fi
             if ! git show "${target}:CHANGELOG.md" | grep -Fq "## [$version] - " \
               && ! git show "${target}:CHANGELOG.md" | grep -Fq "## $version - "; then
