@@ -272,6 +272,65 @@ final class SessionStoreTest extends TestCase
         }
     }
 
+    public function testAllAndLoadDoNotFollowSymlinkedSessionDirectoriesOrMetadata(): void
+    {
+        $store = new SessionStore();
+        $localSession = $store->create($this->root, 'task.local');
+        $outsideRoot = $this->root . '-outside';
+        mkdir($outsideRoot, 0777, true);
+        $outsideSession = $store->create($outsideRoot, 'task.external');
+        $directoryLink = $this->root . '/redirected-session';
+        $metadataLink = $localSession->path . '/session.json';
+        $outsideMetadata = $outsideRoot . '/session-copy.json';
+
+        if (!@symlink($outsideSession->path, $directoryLink)) {
+            $this->removeDirectory($outsideRoot);
+            self::markTestSkipped('symlink() is not available.');
+        }
+        if (!copy($outsideSession->path . '/session.json', $outsideMetadata)) {
+            unlink($directoryLink);
+            $this->removeDirectory($outsideRoot);
+            self::fail('Unable to create test metadata.');
+        }
+
+        try {
+            self::assertFalse($store->exists($this->root, 'redirected-session'));
+            self::assertSame([$localSession->id], array_map(
+                static fn (Session $session): string => $session->id,
+                $store->all($this->root),
+            ));
+            try {
+                $store->load($this->root, 'redirected-session');
+                self::fail('Session::load must reject a symlinked session directory.');
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString('regular directory', $exception->getMessage());
+            }
+
+            unlink($metadataLink);
+            self::assertTrue(symlink($outsideMetadata, $metadataLink));
+            self::assertFalse($store->exists($this->root, $localSession->id));
+            self::assertSame([], $store->all($this->root));
+            try {
+                $store->load($this->root, $localSession->id);
+                self::fail('Session::load must reject symlinked metadata.');
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString('Session not found', $exception->getMessage());
+            }
+            self::assertFileExists($outsideMetadata);
+        } finally {
+            if (is_link($metadataLink)) {
+                unlink($metadataLink);
+            }
+            if (is_file($outsideMetadata)) {
+                unlink($outsideMetadata);
+            }
+            if (is_link($directoryLink)) {
+                unlink($directoryLink);
+            }
+            $this->removeDirectory($outsideRoot);
+        }
+    }
+
     public function testPruneDryRunRemovesNothing(): void
     {
         $store = new SessionStore();

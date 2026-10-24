@@ -98,14 +98,26 @@ final class SessionStore
 
     public function exists(string $root, string $id): bool
     {
-        return is_file($this->pathFor($root, $id) . '/' . self::METADATA_FILE);
+        $path = $this->pathFor($root, $id);
+        $metadataPath = $path . '/' . self::METADATA_FILE;
+
+        return !is_link($path)
+            && is_dir($path)
+            && !is_link($metadataPath)
+            && is_file($metadataPath);
     }
 
     public function load(string $root, string $id): Session
     {
         $path = $this->pathFor($root, $id);
+        if (is_link($path)) {
+            throw new RuntimeException(sprintf('Session directory is not a regular directory: %s', $id));
+        }
+        if (!is_dir($path)) {
+            throw new RuntimeException(sprintf('Session not found: %s', $id));
+        }
         $metadataPath = $path . '/' . self::METADATA_FILE;
-        if (!is_file($metadataPath)) {
+        if (is_link($metadataPath) || !is_file($metadataPath)) {
             throw new RuntimeException(sprintf('Session not found: %s', $id));
         }
 
@@ -145,6 +157,10 @@ final class SessionStore
         $sessions = [];
         foreach (scandir($root) ?: [] as $entry) {
             if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $this->pathFor($root, $entry);
+            if (is_link($path) || !is_dir($path)) {
                 continue;
             }
             if ($this->exists($root, $entry)) {
