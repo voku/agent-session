@@ -768,6 +768,11 @@ final class SessionStore
 
     private function removeDirectory(string $path): void
     {
+        if (is_link($path)) {
+            unlink($path);
+
+            return;
+        }
         if (!is_dir($path)) {
             return;
         }
@@ -777,7 +782,7 @@ final class SessionStore
                 continue;
             }
             $full = $path . '/' . $entry;
-            if (is_dir($full)) {
+            if (!is_link($full) && is_dir($full)) {
                 $this->removeDirectory($full);
             } else {
                 unlink($full);
