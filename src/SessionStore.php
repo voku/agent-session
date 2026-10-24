@@ -110,8 +110,11 @@ final class SessionStore
     public function load(string $root, string $id): Session
     {
         $path = $this->pathFor($root, $id);
-        if (is_link($path) || !is_dir($path)) {
+        if (is_link($path)) {
             throw new RuntimeException(sprintf('Session directory is not a regular directory: %s', $id));
+        }
+        if (!is_dir($path)) {
+            throw new RuntimeException(sprintf('Session not found: %s', $id));
         }
         $metadataPath = $path . '/' . self::METADATA_FILE;
         if (is_link($metadataPath) || !is_file($metadataPath)) {
