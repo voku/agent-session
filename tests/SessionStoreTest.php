@@ -238,6 +238,40 @@ final class SessionStoreTest extends TestCase
         self::assertTrue($store->exists($this->root, $active->id));
     }
 
+    public function testPruneUnlinksSymlinkedSessionEntriesWithoutDeletingTheirTargets(): void
+    {
+        $store = new SessionStore();
+        $session = $store->create($this->root, 'task.symlink', 'old');
+        $store->setStatus($session, SessionStatus::DONE);
+        $this->backdate($session, '2000-01-01T00:00:00+00:00');
+
+        $outside = sys_get_temp_dir() . '/agent-session-prune-target-' . bin2hex(random_bytes(8));
+        mkdir($outside);
+        $outsideFile = $outside . '/keep.txt';
+        file_put_contents($outsideFile, 'must survive pruning');
+        $link = $session->path . '/outside';
+        if (!@symlink($outside, $link)) {
+            unlink($outsideFile);
+            rmdir($outside);
+            self::markTestSkipped('symlink() is not available.');
+        }
+
+        try {
+            self::assertSame(
+                [$session->id],
+                $store->prune($this->root, 30, [SessionStatus::DONE]),
+            );
+            self::assertFileDoesNotExist($link);
+            self::assertSame('must survive pruning', file_get_contents($outsideFile));
+        } finally {
+            if (is_link($link)) {
+                unlink($link);
+            }
+            unlink($outsideFile);
+            rmdir($outside);
+        }
+    }
+
     public function testPruneDryRunRemovesNothing(): void
     {
         $store = new SessionStore();
