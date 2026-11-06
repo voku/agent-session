@@ -107,7 +107,9 @@ def start(binary: Path, store: Path, sock: Path, log: Any) -> subprocess.Popen[b
                                stdout=log, stderr=subprocess.STDOUT)
     for _ in range(100):
         if process.poll() is not None:
-            raise RuntimeError(f"Native daemon exited with {process.returncode}")
+            log.flush()
+            detail = Path(log.name).read_text(errors="replace")[-2000:]
+            raise RuntimeError(f"Native daemon exited with {process.returncode}: {detail}")
         if sock.exists():
             try:
                 wire(sock, "STATS")
@@ -154,7 +156,8 @@ def main() -> int:
         with tempfile.TemporaryDirectory(prefix="navi-brain-probe-") as root:
             base = Path(root)
             store = base / "store"
-            store.mkdir()
+            # Upstream requires an initialized catalog; a plain directory is invalid.
+            subprocess.run([str(binary), "init", str(store)], check=True, timeout=15)
             sock = base / "token.sock"
             with (base / "daemon.log").open("wb") as log:
                 daemon = start(binary, store, sock, log)
