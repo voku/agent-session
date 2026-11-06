@@ -10,3 +10,4 @@
 /.gitattributes export-ignore
 /.editorconfig export-ignore
 /Makefile export-ignore
+/experiments export-ignore
