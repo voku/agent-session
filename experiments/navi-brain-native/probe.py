@@ -146,6 +146,22 @@ def main() -> int:
         ("OrchidVault", "OrchidVault rotates its synthetic access token every 17 days."),
         ("MapleSync", "MapleSync stores its checkpoint in the staging namespace."),
     ]
+    # Deliberate lexical competition: 12 additional distinct, synthetically
+    # named deployment projects. The recall budget is smaller than the corpus.
+    facts.extend(
+        (
+            f"HarborLine{index:02d}",
+            f"HarborLine{index:02d} keeps the deployment checkpoint in vault {index:02d}.",
+        )
+        for index in range(12)
+    )
+    probes = [(project, fact, "exact_project") for project, fact in facts]
+    probes.extend([
+        ("release-oncall approval", facts[0][1], "multiword_fact"),
+        ("green deployment gate", facts[1][1], "multiword_fact"),
+        ("synthetic access token", facts[2][1], "multiword_fact"),
+        ("staging namespace", facts[3][1], "multiword_fact"),
+    ])
     result: dict[str, Any] = {
         "upstream_revision": "39880c39e0d5af2bff5c3ba5f91c0b94aecbbff8",
         "scope": "Native storage correctness and evidence availability, not LLM cognition",
@@ -186,13 +202,14 @@ def main() -> int:
                     assert len(list_all(sock)) == len(facts), "Conflict mutated record count"
                     result["checks"]["receipt_conflict_fails_closed"] = "pass"
 
-                    for project, fact in facts:
-                        cue = project.encode()
-                        response = records(wire(sock, f"RECALL_RECORDS 4 {len(cue)}", cue))
+                    for cue_text, fact, condition in probes:
+                        cue = cue_text.encode()
+                        response = records(wire(sock, f"RECALL_RECORDS 3 {len(cue)}", cue))
                         matching = [i + 1 for i, (_, body) in enumerate(response)
                                     if body == fact.encode()]
                         result["cases"].append({
-                            "cue": project,
+                            "cue": cue_text,
+                            "cue_type": condition,
                             "no_memory_evidence_count": 0,
                             "raw_transcript_evidence_count": len(facts),
                             "native_recall_count": len(response),
@@ -238,7 +255,14 @@ def main() -> int:
 
             result["native_recall_at_3"] = sum(
                 int(case["native_recall_at_3"]) for case in result["cases"]
-            ) / len(facts)
+            ) / len(probes)
+            result["native_mrr_at_3"] = sum(
+                1.0 / case["native_target_rank"] if case["native_target_rank"] else 0.0
+                for case in result["cases"]
+            ) / len(probes)
+            result["fixture_count"] = len(facts)
+            result["query_count"] = len(probes)
+            result["native_retrieval_limit"] = 3
             result["status"] = "pass"
     except Exception as exc:
         result["status"] = "fail"
