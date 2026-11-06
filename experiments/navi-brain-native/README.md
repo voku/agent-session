@@ -36,8 +36,18 @@ deployment projects. There are 20 cues: 16 exact project names and four
 multiword cues from the facts. Each query returns at most three records,
 less than the number stored.
 
-The artifact reports target rank, recall@3 and MRR@3. These measurements are
-observational, not a hard pass gate: a bad result is useful evidence.
+The artifact reports target rank, recall@3 and MRR@3. It also invokes
+ACTIVATE, the upstream's dedicated token-budgeted context assembly path, on
+the same 20 cues in a second pass. ACTIVATE has a 64-native-token budget;
+we record exact-target inclusion and the selected synthetic context, so a
+trivial all-records response cannot be mistaken for selective retrieval.
+These measurements are observational, not a hard pass gate: failures are evidence.
+
+In the initial pinned CI run, RECALL_RECORDS achieved 65% recall@3 and
+MRR@3 of 0.625. ACTIVATE returned only the target memory for each of the
+20 cues, scoring 100% inclusion with 56-61 output bytes per result.
+These are not contradictory API results: the paths use different ranking
+strategies, and neither result demonstrates downstream model accuracy.
 
 The three evidence-availability conditions are:
 
