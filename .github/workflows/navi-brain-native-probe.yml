@@ -1,0 +1,58 @@
+name: Navi-Brain native memory experiment
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/navi-brain-native-probe.yml'
+      - 'experiments/navi-brain-native/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upstream-native-memory:
+    name: Pinned upstream native-memory probe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout our reproducible probe
+        uses: actions/checkout@v4
+
+      - name: Install C compiler and SQLite development headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends build-essential libsqlite3-dev
+
+      - name: Checkout exact public Navi-Brain revision
+        env:
+          UPSTREAM_SHA: 39880c39e0d5af2bff5c3ba5f91c0b94aecbbff8
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --no-checkout https://github.com/hparadiz/Navi-Brain.git "$RUNNER_TEMP/navi-brain"
+          git -C "$RUNNER_TEMP/navi-brain" checkout --detach "$UPSTREAM_SHA"
+          actual="$(git -C "$RUNNER_TEMP/navi-brain" rev-parse HEAD)"
+          test "$actual" = "$UPSTREAM_SHA"
+          echo "UPSTREAM_SHA=$actual" >> "$GITHUB_ENV"
+
+      - name: Compile upstream native memory, without private credentials or model calls
+        run: make -C "$RUNNER_TEMP/navi-brain/memories"
+
+      - name: Run isolated memory, idempotency, restart, recall and corruption probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          python3 experiments/navi-brain-native/probe.py \
+            --binary "$RUNNER_TEMP/navi-brain/memories/build/tokmem" \
+            --output evidence/navi-brain-native.json
+
+      - name: Attach machine-readable evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navi-brain-native-memory
+          path: evidence/navi-brain-native.json
+          if-no-files-found: warn
+          retention-days: 14
