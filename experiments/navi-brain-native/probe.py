@@ -222,6 +222,16 @@ def main() -> int:
                             "native_target_rank": matching[0] if matching else None,
                             "native_recall_at_3": bool(matching and matching[0] <= 3),
                         })
+
+                    # ACTIVATE is Navi-Brain's main context assembly path and
+                    # uses contiguous cue-span scoring absent from RECORDS.
+                    # Probe it in a second pass to keep recall scoring order fixed.
+                    for case, (cue_text, fact, _) in zip(result["cases"], probes, strict=True):
+                        cue = cue_text.encode()
+                        activated = wire(sock, f"ACTIVATE 64 {len(cue)}", cue)
+                        case["activation_contains_target"] = fact.encode() in activated
+                        case["activation_output_bytes"] = len(activated)
+                        case["activation_excerpt"] = activated.decode("utf-8", "replace")[:280]
                 finally:
                     close(daemon, sock)
 
@@ -269,10 +279,15 @@ def main() -> int:
             result["fixture_count"] = len(facts)
             result["query_count"] = len(probes)
             result["native_retrieval_limit"] = 3
+            result["native_activation_budget"] = 64
+            result["native_activation_hit_rate"] = sum(
+                int(case["activation_contains_target"]) for case in result["cases"]
+            ) / len(probes)
             result["by_cue_type"] = {
                 cue_type: {
                     "query_count": len(cases),
                     "recall_at_3": sum(int(case["native_recall_at_3"]) for case in cases) / len(cases),
+                    "activation_hit_rate": sum(int(case["activation_contains_target"]) for case in cases) / len(cases),
                 }
                 for cue_type in ("exact_project", "multiword_fact")
                 if (cases := [case for case in result["cases"] if case["cue_type"] == cue_type])
