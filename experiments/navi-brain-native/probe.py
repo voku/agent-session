@@ -202,17 +202,23 @@ def main() -> int:
                     assert len(list_all(sock)) == len(facts), "Conflict mutated record count"
                     result["checks"]["receipt_conflict_fails_closed"] = "pass"
 
+                    id_to_project = dict(zip(ids, (p for p, _ in facts), strict=True))
                     for cue_text, fact, condition in probes:
                         cue = cue_text.encode()
                         response = records(wire(sock, f"RECALL_RECORDS 3 {len(cue)}", cue))
                         matching = [i + 1 for i, (_, body) in enumerate(response)
                                     if body == fact.encode()]
+                        assert all(memory_id in id_to_project for memory_id, _ in response), \
+                            "Recall exposed a record not present in the fixture"
                         result["cases"].append({
                             "cue": cue_text,
                             "cue_type": condition,
                             "no_memory_evidence_count": 0,
                             "raw_transcript_evidence_count": len(facts),
                             "native_recall_count": len(response),
+                            "native_returned_projects": [
+                                id_to_project[memory_id] for memory_id, _ in response
+                            ],
                             "native_target_rank": matching[0] if matching else None,
                             "native_recall_at_3": bool(matching and matching[0] <= 3),
                         })
@@ -263,6 +269,14 @@ def main() -> int:
             result["fixture_count"] = len(facts)
             result["query_count"] = len(probes)
             result["native_retrieval_limit"] = 3
+            result["by_cue_type"] = {
+                cue_type: {
+                    "query_count": len(cases),
+                    "recall_at_3": sum(int(case["native_recall_at_3"]) for case in cases) / len(cases),
+                }
+                for cue_type in ("exact_project", "multiword_fact")
+                if (cases := [case for case in result["cases"] if case["cue_type"] == cue_type])
+            }
             result["status"] = "pass"
     except Exception as exc:
         result["status"] = "fail"
