@@ -19,6 +19,20 @@ to be volatile — it helps complete the current task and then it gets pruned. I
 
 This package keeps that layer explicit, claimable, and bounded.
 
+## Where to work in this repository
+
+Session state is temporary and task-local. The following files distinguish that state from durable task authority:
+
+| Concern | Source of truth |
+| --- | --- |
+| Session identity, state and persistence | [`src/Session.php`](src/Session.php), [`src/SessionStatus.php`](src/SessionStatus.php) and [`src/SessionStore.php`](src/SessionStore.php) |
+| Recorded validation observations | [`src/ValidationEvidence.php`](src/ValidationEvidence.php) and [`src/ValidationEvidenceStore.php`](src/ValidationEvidenceStore.php) |
+| Bounded handoff to another agent | [`src/SessionHandoffProjector.php`](src/SessionHandoffProjector.php) and [`src/SessionHandoff.php`](src/SessionHandoff.php) |
+| Integration and CLI contracts | [PHP API](docs/php-api.md), [CLI reference](docs/cli.md) and [`src/Cli.php`](src/Cli.php) |
+| Regression tests | [`tests/`](tests/) |
+
+Do not use a historical PASS recorded in a Session as proof of current source correctness. `agent-loop` owns governed transitions.
+
 ## What it manages
 
 Each session is one directory under the sessions root. The standalone CLI now
