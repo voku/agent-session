@@ -77,9 +77,15 @@ trying to infer it later. The reason lives in `session.json` and disappears when
 the Session is pruned. Any lifecycle provenance that must survive pruning remains
 the responsibility of the durable owner, for example the governed Run history.
 
-A closed Session **status** is terminal: it cannot be reopened or relabelled as
-the other closed status, and repeating the identical close is a no-op. Use
-`create()` for genuinely fresh working memory and `rehydrate()` for
+`close()` and `setStatus()` cannot relabel a closed Session; repeating an identical
+close is a no-op. A `DONE` Session can, however, be reopened under the exact
+same identity with `SessionStore::reopen($session, $reason)` when a governed owner
+needs further work after finish (for example, to address review findings). This
+requires a non-empty reason and no conflicting open Session for the task; it
+records a checkpoint. `DROPPED` Sessions cannot be reopened, and the caller must
+still enforce any required governed approval.
+
+Use `create()` for genuinely fresh working memory and `rehydrate()` for
 caller-authorized historical identity. Both refuse to create parallel open
 working memory for a task that already has an open governed Session.
 
