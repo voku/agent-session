@@ -1,6 +1,8 @@
 ---
 name: agent-session-maintainer
 description: Maintain voku/agent-session package source, tests, docs, and CLI behavior for pruneable working memory - Session identity, claim metadata, checkpoints, handoff projection, validation evidence, and retention.
+metadata:
+  author: moellekenl <lars.moelleken@remondis.de>
 ---
 
 # Agent Session Maintainer
@@ -40,7 +42,7 @@ Every change has to leave these true:
 
 ## Fast path
 
-1. Read `AGENTS.md` and the relevant source before editing; check `git status --short`.
+1. Read [AGENTS.md](../../../AGENTS.md) and the relevant source before editing; check `git status --short`.
 2. Keep filesystem layout knowledge inside Session-owned APIs, not in callers.
 3. Before adding a new Session fact, ask whether it is genuinely working-memory
    state. If it must survive pruning, it belongs to a durable owner instead.
@@ -66,5 +68,5 @@ do not substitute for the package gate.
 ## Releases
 
 Releases are marker-driven: a `.release/<version>.json` marker must point at a
-release-ready commit whose own `CHANGELOG.md` contains that version. Do not
+release-ready commit whose own [CHANGELOG.md](../../../CHANGELOG.md) contains that version. Do not
 create or move release tags by hand when the repository workflow can do it.
