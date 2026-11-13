@@ -2,7 +2,7 @@
 name: agent-session-maintainer
 description: Maintain voku/agent-session package source, tests, docs, and CLI behavior for pruneable working memory - Session identity, claim metadata, checkpoints, handoff projection, validation evidence, and retention.
 metadata:
-  author: moellekenl <lars.moelleken@remondis.de>
+  author: Lars Moelleken <lars@moelleken.org>
 ---
 
 # Agent Session Maintainer
