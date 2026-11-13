@@ -17,7 +17,7 @@ This package is a low-level owner and has no runtime `agent-*` dependency. Prese
 ## Invariants to preserve
 
 - A task has at most one open governed Session. Ephemeral Sessions are explicitly outside that rule in both directions.
-- Closed Session status is terminal. Repeating the identical close may be a no-op; reopening or relabelling terminal state is not allowed.
+- `setStatus()`/`close()` cannot relabel a closed Session; an identical close may be a no-op. `SessionStore::reopen()` is a narrow exception for `DONE` Sessions: it preserves the exact id, requires a non-empty reason and no conflicting open Session, and records a checkpoint. `DROPPED` Sessions cannot be reopened. The caller still owns any required governed approval.
 - `rehydrate()` restores an exact caller-authorized historical Session identity; it must not silently allocate a replacement identity.
 - Validation evidence stored here is an observation bound to the recorded Contract revision/snapshot. Historical PASS/FAIL must never be promoted to current implementation truth by this package.
 - Handoff output is a derived read projection, not a new persisted authority surface.
@@ -25,7 +25,7 @@ This package is a low-level owner and has no runtime `agent-*` dependency. Prese
 
 ## Implementation guidance
 
-Prefer small immutable value objects, explicit types, and fail-closed validation. Keep filesystem layout knowledge inside Session-owned APIs. When a caller needs a new Session fact, first ask whether it is genuinely working-memory state; if it must survive Session pruning, it probably belongs elsewhere.
+Keep filesystem layout knowledge inside Session-owned APIs. When a caller needs a new Session fact, first ask whether it is genuinely working-memory state; if it must survive Session pruning, it belongs to a durable owner.
 
 ## Validation
 
